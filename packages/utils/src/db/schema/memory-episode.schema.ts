@@ -24,6 +24,10 @@ function getInMemoryEpisodeStore(): InMemoryEpisode[] {
   return globalThis.__yuiju_in_memory_memory_episodes as InMemoryEpisode[];
 }
 
+function isOnlyTodayOptions(options: GetRecentMemoryEpisodesOptions): boolean {
+  return (options as { onlyToday?: boolean }).onlyToday === true;
+}
+
 /**
  * MongoDB 中的统一 Episode 文档。
  *
@@ -196,7 +200,7 @@ export async function getRecentMemoryEpisodes(
     if (typeof options.isDev === "boolean") {
       items = items.filter((item) => item.isDev === options.isDev);
     }
-    if (options.onlyToday) {
+    if (isOnlyTodayOptions(options)) {
       const startOfToday = dayjs().startOf("day");
       const startOfTomorrow = startOfToday.add(1, "day");
       items = items.filter(
@@ -232,7 +236,7 @@ export async function getRecentMemoryEpisodes(
   if (typeof options.isDev === "boolean") {
     filter.isDev = options.isDev;
   }
-  if (options.onlyToday) {
+  if (isOnlyTodayOptions(options)) {
     const startOfToday = dayjs().startOf("day");
     const startOfTomorrow = startOfToday.add(1, "day");
     filter.happenedAt = {
