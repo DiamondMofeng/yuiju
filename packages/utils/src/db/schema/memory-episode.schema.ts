@@ -16,6 +16,14 @@ function isMongoDisabled(): boolean {
   return process.env.YUIJU_DISABLE_MONGO === "1" || process.env.VITEST === "true";
 }
 
+function getInMemoryEpisodeStore(): InMemoryEpisode[] {
+  if (!globalThis.__yuiju_in_memory_memory_episodes) {
+    globalThis.__yuiju_in_memory_memory_episodes = [];
+  }
+
+  return globalThis.__yuiju_in_memory_memory_episodes as InMemoryEpisode[];
+}
+
 /**
  * MongoDB 中的统一 Episode 文档。
  *
@@ -123,8 +131,7 @@ export async function saveMemoryEpisode(input: MemoryEpisodeWriteInput): Promise
       updatedAt: now,
     };
 
-    globalThis.__yuiju_in_memory_memory_episodes ??= [];
-    (globalThis.__yuiju_in_memory_memory_episodes as InMemoryEpisode[]).push(episode);
+    getInMemoryEpisodeStore().push(episode);
     return episode as any;
   }
 
@@ -148,7 +155,7 @@ export async function updateMemoryEpisodeExtraction(
   },
 ): Promise<void> {
   if (isMongoDisabled()) {
-    const store = (globalThis.__yuiju_in_memory_memory_episodes ??= []) as InMemoryEpisode[];
+    const store = getInMemoryEpisodeStore();
     const target = store.find((item) => item.id === episodeId);
     if (target) {
       target.extractionStatus = input.extractionStatus;
@@ -176,7 +183,7 @@ export async function getRecentMemoryEpisodes(
   options: GetRecentMemoryEpisodesOptions = {},
 ): Promise<IMemoryEpisode[]> {
   if (isMongoDisabled()) {
-    const store = (globalThis.__yuiju_in_memory_memory_episodes ??= []) as InMemoryEpisode[];
+    const store = getInMemoryEpisodeStore();
 
     let items = store.slice();
     if (options.types?.length) {
