@@ -8,6 +8,14 @@ import type {
 } from "../../memory/episode";
 import { connectDB } from "../connect";
 
+declare global {
+  var __yuiju_in_memory_memory_episodes: unknown[] | undefined;
+}
+
+function isMongoDisabled(): boolean {
+  return process.env.YUIJU_DISABLE_MONGO === "1" || process.env.VITEST === "true";
+}
+
 /**
  * MongoDB 中的统一 Episode 文档。
  *
@@ -31,6 +39,8 @@ export interface IMemoryEpisode extends Document {
   createdAt: Date;
   updatedAt: Date;
 }
+
+type InMemoryEpisode = Omit<IMemoryEpisode, keyof Document> & { id: string };
 
 const MemoryEpisodeSchema = new Schema<IMemoryEpisode>(
   {
@@ -94,6 +104,30 @@ export interface GetRecentMemoryEpisodesOptions {
  * 保存统一 Episode 到 MongoDB。
  */
 export async function saveMemoryEpisode(input: MemoryEpisodeWriteInput): Promise<IMemoryEpisode> {
+  if (isMongoDisabled()) {
+    const now = new Date();
+    const episode: InMemoryEpisode = {
+      id: `mem_ep_${now.getTime()}_${Math.random().toString(16).slice(2)}`,
+      source: input.source,
+      type: input.type,
+      subjectId: input.subjectId,
+      counterpartyId: input.counterpartyId,
+      happenedAt: input.happenedAt,
+      summaryText: input.summaryText,
+      importance: input.importance ?? 0.5,
+      payload: (input.payload ?? {}) as Record<string, unknown>,
+      extractionStatus: "pending",
+      extractedFactIds: undefined,
+      isDev: input.isDev ?? false,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    globalThis.__yuiju_in_memory_memory_episodes ??= [];
+    (globalThis.__yuiju_in_memory_memory_episodes as InMemoryEpisode[]).push(episode);
+    return episode as any;
+  }
+
   await connectDB();
   const episode = new MemoryEpisodeModel({
     ...input,
@@ -113,6 +147,17 @@ export async function updateMemoryEpisodeExtraction(
     extractedFactIds?: string[];
   },
 ): Promise<void> {
+  if (isMongoDisabled()) {
+    const store = (globalThis.__yuiju_in_memory_memory_episodes ??= []) as InMemoryEpisode[];
+    const target = store.find((item) => item.id === episodeId);
+    if (target) {
+      target.extractionStatus = input.extractionStatus;
+      target.extractedFactIds = input.extractedFactIds;
+      target.updatedAt = new Date();
+    }
+    return;
+  }
+
   await connectDB();
   await MemoryEpisodeModel.findByIdAndUpdate(episodeId, {
     extractionStatus: input.extractionStatus,
@@ -130,6 +175,44 @@ export async function updateMemoryEpisodeExtraction(
 export async function getRecentMemoryEpisodes(
   options: GetRecentMemoryEpisodesOptions = {},
 ): Promise<IMemoryEpisode[]> {
+  if (isMongoDisabled()) {
+    const store = (globalThis.__yuiju_in_memory_memory_episodes ??= []) as InMemoryEpisode[];
+
+    let items = store.slice();
+    if (options.types?.length) {
+      const types = new Set(options.types);
+      items = items.filter((item) => types.has(item.type));
+    }
+    if (options.subjectId) {
+      items = items.filter((item) => item.subjectId === options.subjectId);
+    }
+    if (typeof options.isDev === "boolean") {
+      items = items.filter((item) => item.isDev === options.isDev);
+    }
+    if (options.onlyToday) {
+      const startOfToday = dayjs().startOf("day");
+      const startOfTomorrow = startOfToday.add(1, "day");
+      items = items.filter(
+        (item) =>
+          item.happenedAt >= startOfToday.toDate() && item.happenedAt < startOfTomorrow.toDate(),
+      );
+    } else if (options.happenedAfter || options.happenedBefore) {
+      items = items.filter((item) => {
+        if (options.happenedAfter && item.happenedAt < options.happenedAfter) return false;
+        if (options.happenedBefore && item.happenedAt >= options.happenedBefore) return false;
+        return true;
+      });
+    }
+
+    items.sort((left, right) => {
+      const happenedDiff = right.happenedAt.getTime() - left.happenedAt.getTime();
+      if (happenedDiff !== 0) return happenedDiff;
+      return right.createdAt.getTime() - left.createdAt.getTime();
+    });
+
+    return items.slice(0, options.limit ?? 10) as any;
+  }
+
   await connectDB();
 
   const filter: Record<string, unknown> = {};
