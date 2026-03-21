@@ -1,20 +1,55 @@
-import { saveMemoryEpisode, updateMemoryEpisodeExtraction } from "../db";
-import type { MemoryEpisodeWriteInput } from "./episode";
-import { llmMemoryExtractor } from "./fact";
-import { getMemoryServiceClientFromEnv } from "./memory-service-client";
+import {
+  getPendingMemoryEpisodes,
+  type IMemoryEpisode,
+  saveMemoryEpisode,
+  updateMemoryEpisodeExtraction,
+} from "../db";
+import type { MemoryEpisode, MemoryEpisodeWriteInput } from "./episode";
+import { llmMemoryExtractor, type MemoryExtractor } from "./fact";
+import { getMemoryServiceClientFromEnv, type MemoryServiceClient } from "./memory-service-client";
+
+export interface EpisodeProcessorDependencies {
+  extractor?: MemoryExtractor;
+  memoryClient?: MemoryServiceClient | null;
+}
+
+export interface ProcessPendingEpisodesOptions extends EpisodeProcessorDependencies {
+  limit?: number;
+  statuses?: IMemoryEpisode["extractionStatus"][];
+  isDev?: boolean;
+}
+
+function toDomainEpisode(episode: IMemoryEpisode): MemoryEpisode {
+  return {
+    id: episode.id,
+    source: episode.source,
+    type: episode.type,
+    subjectId: episode.subjectId,
+    counterpartyId: episode.counterpartyId,
+    happenedAt: episode.happenedAt,
+    summaryText: episode.summaryText,
+    importance: episode.importance,
+    payload: episode.payload,
+    extractionStatus: episode.extractionStatus,
+    extractedFactIds: episode.extractedFactIds,
+    isDev: episode.isDev,
+  };
+}
 
 /**
- * 统一 Episode 发射入口。
+ * 处理单条待抽取 Episode。
  *
- * 当前阶段说明：
- * - 先写 Mongo 作为事件真相源；
- * - 再同步执行 extractor，将高价值事实写入 Graphiti；
- * - Graphiti 失败不会阻塞主链路，但会回写 extractionStatus 便于后续补偿。
+ * 说明：
+ * - processor 与主链路分离，便于后续做定时扫描、失败重试、历史回灌；
+ * - 如果没有记忆服务，仍然会执行抽取并回写本地 fact id，保证状态可闭环。
  */
-export async function emitMemoryEpisode(episode: MemoryEpisodeWriteInput): Promise<void> {
-  const savedEpisode = await saveMemoryEpisode(episode);
-  const episodeId = savedEpisode.id;
-  const memoryClient = getMemoryServiceClientFromEnv();
+export async function processMemoryEpisode(
+  episode: IMemoryEpisode,
+  dependencies: EpisodeProcessorDependencies = {},
+): Promise<void> {
+  const extractor = dependencies.extractor ?? llmMemoryExtractor;
+  const memoryClient = dependencies.memoryClient ?? getMemoryServiceClientFromEnv();
+  const episodeId = episode.id;
 
   if (!episodeId) {
     return;
@@ -25,9 +60,9 @@ export async function emitMemoryEpisode(episode: MemoryEpisodeWriteInput): Promi
       extractionStatus: "processing",
     });
 
-    const extractedFacts = await llmMemoryExtractor.extract({
-      ...episode,
-      id: episodeId,
+    const extractedFacts = await extractor.extract({
+      ...toDomainEpisode(episode),
+      extractionStatus: "processing",
     });
 
     if (extractedFacts.length === 0) {
@@ -50,9 +85,44 @@ export async function emitMemoryEpisode(episode: MemoryEpisodeWriteInput): Promi
       extractedFactIds: factIds,
     });
   } catch (error) {
-    console.error("[emitMemoryEpisode] failed to extract/write facts", error);
+    console.error("[processMemoryEpisode] failed to extract/write facts", error);
     await updateMemoryEpisodeExtraction(episodeId, {
       extractionStatus: "failed",
     });
   }
+}
+
+/**
+ * 扫描并处理待抽取 Episode。
+ */
+export async function processPendingMemoryEpisodes(
+  options: ProcessPendingEpisodesOptions = {},
+): Promise<number> {
+  const episodes = await getPendingMemoryEpisodes({
+    limit: options.limit,
+    statuses: options.statuses,
+    isDev: options.isDev,
+  });
+
+  for (const episode of episodes) {
+    await processMemoryEpisode(episode, options);
+  }
+
+  return episodes.length;
+}
+
+/**
+ * 统一 Episode 发射入口。
+ *
+ * 当前阶段说明：
+ * - 主链路只负责先写 Mongo 作为事件真相源；
+ * - 异步抽取由独立 processor 负责，可由 tick/chat 后置触发，也可由扫描器补偿。
+ */
+export async function emitMemoryEpisode(episode: MemoryEpisodeWriteInput): Promise<string | null> {
+  const savedEpisode = await saveMemoryEpisode({
+    ...episode,
+    extractionStatus: "pending",
+  });
+
+  return savedEpisode.id ?? null;
 }

@@ -19,17 +19,18 @@ export const siliconflow = createOpenAICompatible({
   baseURL: "https://api.siliconflow.cn/v1",
   apiKey: process.env.SILICONFLOW_API_KEY ?? "",
   name: "Siliconflow",
+  supportsStructuredOutputs: true,
 });
 
 /**
  * 废物
  */
-export const model_qwen3_8B = wrapLanguageModel({
+export const small_modal = wrapLanguageModel({
   model: siliconflow("Qwen/Qwen3-8B"),
   middleware: [logMiddleware],
 });
 
-export const model_deepseek_reasoner = wrapLanguageModel({
+export const strong_model = wrapLanguageModel({
   model: deepseek("deepseek-reasoner"),
   middleware: [logMiddleware],
 });

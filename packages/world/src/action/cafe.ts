@@ -167,6 +167,7 @@ export const cafeAction: ActionMetadata[] = [
   },
   {
     action: ActionId.Work_At_Cafe,
+    // TODO：没有饱腹度变化
     description: "在咖啡店打工。[金币+200][体力-10][心情-5][耗时60分钟]",
     precondition(context) {
       return allTrue([

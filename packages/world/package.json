@@ -16,7 +16,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "AGPL-3.0-or-later",
   "packageManager": "pnpm@10.14.0",
   "dependencies": {
     "mistreevous": "^4.3.1",

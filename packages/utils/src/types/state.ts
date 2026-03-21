@@ -61,6 +61,28 @@ export type InventoryItem = {
   metadata: FoodMetadata | MaterialMetadata;
 };
 
+/**
+ * 运行中的 action 等待上下文。
+ *
+ * 说明：
+ * - `actionStartedAt` 表示本次 action 开始执行的时间；
+ * - `actionDurationMinutes` 表示本次 action 的总持续时间；
+ * - `waitUntil` 表示本次等待逻辑应结束的绝对时间，用于进程重启后恢复剩余等待时长；
+ * - `completionEvent` 会在等待结束后的下一次 tick 继续作为上下文传入。
+ */
+export interface RunningActionState {
+  /** 当前正在经历等待阶段的 action */
+  action: ActionId;
+  /** action 开始执行时间 */
+  actionStartedAt: string;
+  /** action 总持续时间（分钟） */
+  actionDurationMinutes: number;
+  /** 等待逻辑的目标结束时间 */
+  waitUntil: string;
+  /** 下一次 tick 使用的完成事件上下文 */
+  completionEvent?: string;
+}
+
 export interface CharacterStateData {
   action: ActionId;
   location: Location;
@@ -76,6 +98,8 @@ export interface CharacterStateData {
   dailyActionsDoneToday: ActionId[];
   /** 背包物品列表 */
   inventory?: InventoryItem[];
+  /** 运行中的 action 等待上下文 */
+  runningAction: RunningActionState | null;
 }
 
 export interface ICharacterState extends CharacterStateData {
@@ -97,6 +121,17 @@ export interface ICharacterState extends CharacterStateData {
   clearDailyActions(): Promise<void>;
   /** 获取状态日志（深拷贝） */
   log(): CharacterStateData;
+  /**
+   * 写入运行中的 action 等待上下文。
+   *
+   * 该上下文会在 action 执行完成、进入等待前落盘，
+   * 供程序重启后恢复剩余等待时间。
+   */
+  setRunningAction(runningAction: RunningActionState): Promise<void>;
+  /** 清除运行中的 action 等待上下文。 */
+  clearRunningAction(): Promise<void>;
+  /** 获取当前运行中的 action 等待上下文。 */
+  getRunningAction(): RunningActionState | null;
 
   /** 背包管理方法 */
   /** 添加物品到背包 */

@@ -1,5 +1,5 @@
 import { generateText, stepCountIs } from "ai";
-import { model_deepseek_reasoner } from "@/llm/utils";
+import { strong_model } from "@/llm/utils";
 
 const WORLD_MAP_DSL = `
 place HOME "家"
@@ -47,7 +47,7 @@ export async function main() {
   ].join("\n");
 
   const result = await generateText({
-    model: model_deepseek_reasoner,
+    model: strong_model,
     prompt,
     stopWhen: stepCountIs(10),
   });

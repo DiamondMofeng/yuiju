@@ -13,10 +13,18 @@ export type MemoryEpisodeSource = "world_tick" | "chat" | "system";
  * 说明：
  * - behavior: 世界 tick 中执行的行为事件；
  * - conversation: 对话窗口归档事件；
- * - plan_update: 当前阶段的轻量计划变更事件；
+ * - plan_*: 细粒度计划生命周期事件；
  * - system: 外部注入或系统侧状态变更事件。
  */
-export type MemoryEpisodeType = "behavior" | "conversation" | "plan_update" | "system";
+export type MemoryEpisodeType =
+  | "behavior"
+  | "conversation"
+  | "plan_created"
+  | "plan_updated"
+  | "plan_completed"
+  | "plan_abandoned"
+  | "plan_superseded"
+  | "system";
 
 /**
  * 事实抽取状态。

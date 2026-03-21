@@ -2,9 +2,11 @@ import type {
   ActionAgentDecision,
   ActionContext,
   MemoryEpisode,
+  MemoryEpisodeType,
   PlanChange,
 } from "@yuiju/utils";
 import { ActionId, DEFAULT_MEMORY_SUBJECT_ID } from "@yuiju/utils";
+
 const DEFAULT_IMPORTANCE = 0.5;
 
 export interface BuildBehaviorEpisodeInput {
@@ -23,19 +25,27 @@ export interface BuildPlanUpdateEpisodesInput {
   isDev: boolean;
 }
 
-interface PlanUpdateEpisodePayload {
+interface PlanLifecycleEpisodePayload {
   planId: string;
   planScope: "main" | "active";
-  changeType: "created" | "updated" | "completed" | "cancelled" | "replaced";
+  changeType: PlanChange["changeType"];
   before?: {
     id: string;
     title: string;
     status: string;
+    parentPlanId?: string;
+    reason?: string;
+    source?: string;
+    expiresAt?: string;
   };
   after?: {
     id: string;
     title: string;
     status: string;
+    parentPlanId?: string;
+    reason?: string;
+    source?: string;
+    expiresAt?: string;
   };
   changeReason: string;
 }
@@ -95,17 +105,49 @@ export function buildBehaviorEpisode(
 }
 
 /**
- * 构建轻量计划变更 Episode 列表。
+ * 构建计划生命周期 Episode 列表。
  *
  * 说明：
- * - 当前阶段只记录字段值是否发生变化；
- * - 不引入 planId / 生命周期管理，避免与阶段三的计划模块设计耦合。
+ * - 每个 PlanChange 都映射为单独的 episode type，方便后续查询和事实提炼；
+ * - payload 同时保留 before/after 快照，用于补偿重跑时恢复上下文。
  */
 export function buildPlanUpdateEpisodes(
   input: BuildPlanUpdateEpisodesInput,
-): MemoryEpisode<PlanUpdateEpisodePayload>[] {
+): MemoryEpisode<PlanLifecycleEpisodePayload>[] {
   return input.changes.map((change) =>
-    createPlanUpdateEpisode({
+    createPlanLifecycleEpisode({
+      change,
+      happenedAt: input.happenedAt,
+      isDev: input.isDev,
+    }),
+  );
+}
+
+function createPlanLifecycleEpisode(input: {
+  change: PlanChange;
+  happenedAt: Date;
+  isDev: boolean;
+}): MemoryEpisode<PlanLifecycleEpisodePayload> {
+  const { change } = input;
+  const scopeText = change.scope === "main" ? "主计划" : "活跃计划";
+  const actionText = describeChangeType(change.changeType);
+  const episodeType = mapPlanChangeTypeToEpisodeType(change.changeType);
+  const changeReason = `本次 tick ${actionText}${scopeText}`;
+
+  return {
+    source: "world_tick",
+    type: episodeType,
+    subjectId: DEFAULT_MEMORY_SUBJECT_ID,
+    happenedAt: input.happenedAt,
+    summaryText: [
+      `悠酱${actionText}${scopeText}`,
+      `原计划：${stringifyPlanValue(change.before?.title)}`,
+      `新计划：${stringifyPlanValue(change.after?.title)}`,
+    ].join("；"),
+    importance: DEFAULT_IMPORTANCE,
+    extractionStatus: "pending",
+    isDev: input.isDev,
+    payload: {
       planId: change.planId,
       planScope: change.scope,
       changeType: change.changeType,
@@ -114,6 +156,10 @@ export function buildPlanUpdateEpisodes(
             id: change.before.id,
             title: change.before.title,
             status: change.before.status,
+            parentPlanId: change.before.parentPlanId,
+            reason: change.before.reason,
+            source: change.before.source,
+            expiresAt: change.before.expiresAt,
           }
         : undefined,
       after: change.after
@@ -121,56 +167,32 @@ export function buildPlanUpdateEpisodes(
             id: change.after.id,
             title: change.after.title,
             status: change.after.status,
+            parentPlanId: change.after.parentPlanId,
+            reason: change.after.reason,
+            source: change.after.source,
+            expiresAt: change.after.expiresAt,
           }
         : undefined,
-      happenedAt: input.happenedAt,
-      isDev: input.isDev,
-    }),
-  );
-}
-
-function createPlanUpdateEpisode(input: {
-  planId: string;
-  planScope: "main" | "active";
-  changeType: "created" | "updated" | "completed" | "cancelled" | "replaced";
-  before?: {
-    id: string;
-    title: string;
-    status: string;
-  };
-  after?: {
-    id: string;
-    title: string;
-    status: string;
-  };
-  happenedAt: Date;
-  isDev: boolean;
-}): MemoryEpisode<PlanUpdateEpisodePayload> {
-  const scopeText = input.planScope === "main" ? "主计划" : "活跃计划";
-  const changeReason = `本次 tick ${describeChangeType(input.changeType)}${scopeText}`;
-
-  return {
-    source: "world_tick",
-    type: "plan_update",
-    subjectId: DEFAULT_MEMORY_SUBJECT_ID,
-    happenedAt: input.happenedAt,
-    summaryText: [
-      `悠酱${describeChangeType(input.changeType)}${scopeText}`,
-      `原计划：${stringifyPlanValue(input.before?.title)}`,
-      `新计划：${stringifyPlanValue(input.after?.title)}`,
-    ].join("；"),
-    importance: DEFAULT_IMPORTANCE,
-    extractionStatus: "pending",
-    isDev: input.isDev,
-    payload: {
-      planId: input.planId,
-      planScope: input.planScope,
-      changeType: input.changeType,
-      before: input.before,
-      after: input.after,
       changeReason,
     },
   };
+}
+
+function mapPlanChangeTypeToEpisodeType(changeType: PlanChange["changeType"]): MemoryEpisodeType {
+  switch (changeType) {
+    case "created":
+      return "plan_created";
+    case "updated":
+      return "plan_updated";
+    case "completed":
+      return "plan_completed";
+    case "abandoned":
+      return "plan_abandoned";
+    case "superseded":
+      return "plan_superseded";
+    default:
+      return "system";
+  }
 }
 
 function stringifyPlanValue(value?: string | string[]): string {
@@ -185,7 +207,7 @@ function stringifyPlanValue(value?: string | string[]): string {
   return value || "空字符串";
 }
 
-function describeChangeType(changeType: PlanUpdateEpisodePayload["changeType"]): string {
+function describeChangeType(changeType: PlanChange["changeType"]): string {
   switch (changeType) {
     case "created":
       return "创建了";
@@ -193,9 +215,9 @@ function describeChangeType(changeType: PlanUpdateEpisodePayload["changeType"]):
       return "更新了";
     case "completed":
       return "完成了";
-    case "cancelled":
-      return "取消了";
-    case "replaced":
+    case "abandoned":
+      return "放弃了";
+    case "superseded":
       return "替换了";
     default:
       return "更新了";

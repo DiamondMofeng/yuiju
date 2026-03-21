@@ -202,6 +202,11 @@ def _stringify_fact_content(
 ) -> str:
   """
   将提炼后的 fact 转换为 Graphiti 可检索文本。
+
+  当前约束说明：
+  - 本阶段只做轻量 dedupeKey 透传，不在 Python 服务层引入冲突治理；
+  - 同一 dedupeKey 的冲突 fact 仍按独立 episode 写入，避免过早引入覆盖/并存策略复杂度；
+  - 等后续确实出现治理压力时，再补 fact registry、状态流转和证据链聚合。
   """
 
   meta = {
@@ -226,6 +231,12 @@ async def write_facts(payload: FactWriteRequest) -> FactWriteResponse:
   graphiti = await get_graphiti()
   fact_ids: list[str] = []
 
+  # 当前阶段暂不在 Python 侧做去重/冲突治理。
+  # 设计意图：
+  # - 先保持写入链路简单稳定，避免因为“覆盖 / 并存 / 冲突合并”规则不成熟而引入额外复杂度；
+  # - dedupeKey 先完整写入 Graphiti 元数据，给后续治理留下稳定锚点；
+  # - 如果未来需要治理，优先在这里补 registry / evidence chain，而不是改上游协议。
+
   for fact in payload.facts:
     valid_at = fact.validAt
     if valid_at.tzinfo is None:
@@ -247,6 +258,9 @@ async def write_facts(payload: FactWriteRequest) -> FactWriteResponse:
 @app.post("/v1/search", response_model=list[MemorySearchItem])
 async def search_memory(payload: MemorySearchRequest) -> list[MemorySearchItem]:
   graphiti = await get_graphiti()
+
+  # 当前阶段也不对“同 dedupeKey 的多个结果”做冲突折叠。
+  # 这样可以保证搜索结果忠实反映图中已有事实，等治理策略明确后再统一收敛。
 
   # 优化搜索配置，使用 Cross Encoder 进行深度语义精排
   # Cross Encoder 能够更准确地计算查询与结果之间的语义相似度

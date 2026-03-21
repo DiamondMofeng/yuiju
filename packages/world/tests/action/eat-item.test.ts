@@ -20,6 +20,16 @@ vi.mock("@/utils/logger", () => ({
   },
 }));
 
+vi.mock("@/plan", () => ({
+  planManager: {
+    getState: vi.fn(async () => ({
+      activePlanIds: [],
+      activePlans: [],
+      updatedAt: new Date(0).toISOString(),
+    })),
+  },
+}));
+
 import { logger } from "@/utils/logger";
 
 // 获取 Eat_Item action 定义
@@ -79,6 +89,7 @@ function createMockCharacterState(opts: {
     money: 0,
     dailyActionsDoneToday: [],
     inventory: currentInventory,
+    runningAction: null,
 
     // Mock 方法
     async setAction(action: ActionId) {
@@ -112,6 +123,15 @@ function createMockCharacterState(opts: {
     async changeMoney(_delta: number) {},
     async markActionDoneToday(_action: ActionId) {},
     async clearDailyActions() {},
+    async setRunningAction(runningAction: any) {
+      this.runningAction = runningAction;
+    },
+    async clearRunningAction() {
+      this.runningAction = null;
+    },
+    getRunningAction() {
+      return this.runningAction;
+    },
     async addItem(_item: any, _quantity?: number) {},
     async consumeItem(itemName: string, quantity: number = 1): Promise<boolean> {
       const item = this.inventory.find((item) => item.name === itemName);

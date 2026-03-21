@@ -20,12 +20,23 @@ function createContext(opts: {
       money: opts.money ?? 0,
       dailyActionsDoneToday: [],
       inventory: [],
+      runningAction: null,
       async setAction() {},
+      async setLocation() {},
       async setStamina() {},
+      async setSatiety() {},
+      async setMood() {},
       async changeStamina() {},
+      async changeSatiety() {},
+      async changeMood() {},
       async changeMoney() {},
       async markActionDoneToday() {},
       async clearDailyActions() {},
+      async setRunningAction() {},
+      async clearRunningAction() {},
+      getRunningAction() {
+        return null;
+      },
       async addItem(_item: any, _quantity?: number) {},
       async consumeItem() {
         return true;
@@ -41,6 +52,7 @@ function createContext(opts: {
           money: opts.money ?? 0,
           dailyActionsDoneToday: [],
           inventory: [],
+          runningAction: null,
         };
       },
     },

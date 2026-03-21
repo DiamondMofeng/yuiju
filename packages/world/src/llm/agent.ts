@@ -12,12 +12,13 @@ import type {
   BehaviorRecord,
   PlanState,
 } from "@yuiju/utils";
+import { memorySearchTool as unifiedMemorySearchTool } from "@yuiju/utils";
 import { generateText, Output, stepCountIs } from "ai";
 import dayjs from "dayjs";
 import { z } from "zod";
 import { logger } from "@/utils/logger";
 import { queryAvailableFood } from "./tools";
-import { model_deepseek_reasoner } from "./utils";
+import { strong_model } from "./utils";
 
 const RETRY_COUNT = 3;
 
@@ -58,7 +59,7 @@ export async function chooseActionAgent(
       time: dayjs(item.timestamp),
     })),
     location: `${context.characterState.location.major}${
-      context.characterState.location.minor ? "-" + context.characterState.location.minor : ""
+      context.characterState.location.minor ? `-${context.characterState.location.minor}` : ""
     }`,
     mainPlanTitle: planState.mainPlan?.title,
     activePlanTitles: planState.activePlans.map((plan) => plan.title),
@@ -67,16 +68,17 @@ export async function chooseActionAgent(
   for (let i = 0; i < RETRY_COUNT; i++) {
     try {
       const { output, reasoningText } = await generateText({
-        model: model_deepseek_reasoner,
+        model: strong_model,
         tools: {
+          memorySearch: unifiedMemorySearchTool,
           queryAvailableFood: queryAvailableFood(context),
         },
         output: Output.object({
           schema: z.object({
             action: z
               .enum(actionList?.map((item) => item.action))
-              .describe("Action ID，例如：idle、wake_up等"),
-            reason: z.string().describe("简短理由，说明为什么选择这个Action"),
+              .describe("Action ID，例如：发呆、起床等"),
+            reason: z.string().describe("说明为什么选择这个Action"),
             durationMinute: z
               .number()
               .optional()
@@ -134,7 +136,7 @@ export async function chooseFoodAgent(
   for (let i = 0; i < RETRY_COUNT; i++) {
     try {
       const { output } = await generateText({
-        model: model_deepseek_reasoner,
+        model: strong_model,
         // providerOptions: {
         //   Siliconflow: {
         //     enable_thinking: true,
@@ -195,7 +197,7 @@ export async function chooseShopProductAgent(
   for (let i = 0; i < RETRY_COUNT; i++) {
     try {
       const { output } = await generateText({
-        model: model_deepseek_reasoner,
+        model: strong_model,
         output: Output.object({
           schema: z.object({
             value: z.enum(productList.map((item) => item.value)).describe("选择的商品名称"),
@@ -249,7 +251,7 @@ export async function chooseCafeCoffeeAgent(
   for (let i = 0; i < RETRY_COUNT; i++) {
     try {
       const { output } = await generateText({
-        model: model_deepseek_reasoner,
+        model: strong_model,
         output: Output.object({
           schema: z.object({
             value: z.enum(coffeeList.map((item) => item.value)).describe("选择的咖啡名称"),

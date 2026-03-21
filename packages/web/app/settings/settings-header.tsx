@@ -8,7 +8,11 @@ export function SettingsHeader() {
         <p className="mt-1.5 text-[13px] text-[#6b7480]">对话标识保存在本地浏览器</p>
       </div>
 
-      <Badge variant="pill" size="default" className="whitespace-nowrap border-[#d9e6f5] bg-[#f7fbff] text-[#2b2f36]">
+      <Badge
+        variant="pill"
+        size="default"
+        className="whitespace-nowrap border-[#d9e6f5] bg-[#f7fbff] text-[#2b2f36]"
+      >
         <span className="text-[#6b7480]">主题</span>
         <strong>—</strong>
       </Badge>

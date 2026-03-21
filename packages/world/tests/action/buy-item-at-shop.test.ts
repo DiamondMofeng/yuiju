@@ -19,6 +19,16 @@ vi.mock("@/utils/logger", () => ({
   },
 }));
 
+vi.mock("@/plan", () => ({
+  planManager: {
+    getState: vi.fn(async () => ({
+      activePlanIds: [],
+      activePlans: [],
+      updatedAt: new Date(0).toISOString(),
+    })),
+  },
+}));
+
 const buyItemAtShopAction = shopAction.find((a) => a.action === ActionId.Buy_Item_At_Shop);
 if (!buyItemAtShopAction) {
   throw new Error("Buy_Item_At_Shop action not found");
@@ -43,6 +53,7 @@ function createMockCharacterState(opts: {
     money: currentMoney,
     dailyActionsDoneToday: [],
     inventory: currentInventory,
+    runningAction: null,
 
     async setAction(action: ActionId) {
       currentAction = action;
@@ -66,6 +77,15 @@ function createMockCharacterState(opts: {
     },
     async markActionDoneToday(_action: ActionId) {},
     async clearDailyActions() {},
+    async setRunningAction(runningAction: any) {
+      this.runningAction = runningAction;
+    },
+    async clearRunningAction() {
+      this.runningAction = null;
+    },
+    getRunningAction() {
+      return this.runningAction;
+    },
     async addItem(item: Omit<InventoryItem, "quantity">, quantity: number = 1) {
       const existing = this.inventory.find((i: any) => i.name === item.name);
       if (existing) {
@@ -94,6 +114,7 @@ function createMockCharacterState(opts: {
         money: currentMoney,
         dailyActionsDoneToday: [],
         inventory: currentInventory,
+        runningAction: this.runningAction,
       };
     },
   };

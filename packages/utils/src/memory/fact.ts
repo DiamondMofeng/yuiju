@@ -3,6 +3,9 @@ import { generateText, Output } from "ai";
 import { z } from "zod";
 import type { MemoryEpisode } from "./episode";
 
+const MAX_FACTS_PER_EPISODE = 2;
+const MIN_FACT_CONFIDENCE = 0.75;
+
 /**
  * 当前支持进入 Graphiti 的事实类型。
  */
@@ -59,38 +62,141 @@ function createFactDedupeKey(parts: string[]): string {
     .join("|");
 }
 
-const extractedFactSchema = z.object({
-  facts: z.array(
-    z.object({
-      type: z.enum(["preference", "relation", "plan"]),
-      subject: z.string().min(1),
-      predicate: z.string().min(1),
-      object: z.string().min(1),
-      summary: z.string().min(1),
-      confidence: z.number().min(0).max(1),
-      metadata: z.record(z.string(), z.unknown()).optional(),
-    }),
-  ),
+const extractedFactItemSchema = z.object({
+  type: z.enum(["preference", "relation", "plan"]),
+  subject: z.string().min(1),
+  predicate: z.string().min(1),
+  object: z.string().min(1),
+  summary: z.string().min(1),
+  confidence: z.number().min(0).max(1),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
+
+const extractedFactSchema = z.object({
+  shouldWrite: z.boolean(),
+  discardReason: z.string().optional(),
+  facts: z.array(extractedFactItemSchema).max(MAX_FACTS_PER_EPISODE),
+});
+
+/**
+ * 收敛传给 extractor 的 episode 上下文，避免把完整快照噪声直接暴露给模型。
+ *
+ * 说明：
+ * - behavior 只保留与动作决策直接相关的字段；
+ * - conversation 只保留对话窗口的计数、对象和最近几条消息；
+ * - plan 生命周期只保留前后计划标题、状态等核心信息；
+ * - 其他类型回退为原始 payload，避免未来新增类型时完全失去上下文。
+ */
+function buildEpisodePayloadContext(episode: MemoryEpisode): unknown {
+  const payload = episode.payload as Record<string, unknown>;
+
+  if (episode.type === "behavior") {
+    return {
+      action: payload.action,
+      reason: payload.reason,
+      executionResult: payload.executionResult,
+      durationMinutes: payload.durationMinutes,
+      relatedPlanId: payload.relatedPlanId,
+      location: payload.location,
+    };
+  }
+
+  if (episode.type === "conversation") {
+    const rawMessages = Array.isArray(payload.messages) ? payload.messages : [];
+
+    return {
+      counterpartyName: payload.counterpartyName,
+      messageCount: payload.messageCount,
+      windowStart: payload.windowStart,
+      windowEnd: payload.windowEnd,
+      recentMessages: rawMessages.slice(-6),
+    };
+  }
+
+  if (episode.type.startsWith("plan_")) {
+    return {
+      planId: payload.planId,
+      planScope: payload.planScope,
+      changeType: payload.changeType,
+      before: payload.before,
+      after: payload.after,
+      changeReason: payload.changeReason,
+    };
+  }
+
+  return payload;
+}
 
 function buildExtractorPrompt(episode: MemoryEpisode): string {
   return [
     "你是记忆系统的事实提炼器，需要从 episode 中提炼值得写入长期记忆图谱的候选事实。",
+    "你的首要目标是减少垃圾写入，宁可少写，也不要把一次性、模糊、对未来无帮助的信息写入长期记忆。",
     "只允许输出以下三类事实：preference、relation、plan。",
-    "不要输出原始事件复述，不要输出不确定、无长期价值、纯一次性的细节。",
-    "如果没有合适事实，返回空数组。",
-    "提炼规则：",
-    "- preference：稳定偏好、喜恶、长期倾向。",
-    "- relation：与某人的关系态度、互动倾向。",
-    "- plan：当前主计划、活跃计划、计划推进倾向。",
-    "输出要求：subject/predicate/object 必须简洁稳定，summary 使用中文，confidence 取 0-1。",
+    "请先判断该 episode 是否值得进入长期记忆：只有未来多次决策可能用到、具有稳定性或持续性、能影响角色画像/关系判断/计划状态的信息才允许写入。",
+    "以下内容必须废弃：",
+    "- 单次动作、一次性结果、纯事件流水账。",
+    "- 礼貌寒暄、闲聊填充语、没有后续影响的短对话。",
+    "- 短时情绪波动、含糊猜测、证据不足的推断。",
+    "- 计划执行过程中的细碎更新、临时安排、对未来无复用价值的上下文。",
+    "- 只是复述 episode，而没有抽象出稳定事实的信息。",
+    "分类型规则：",
+    "- preference：必须是明确表达或有充分证据支持的稳定偏好、喜恶、长期倾向；单次消费/单次提及不能直接推出长期偏好。",
+    "- relation：必须体现稳定态度、关系变化、互动倾向或信任/依赖/回避等长期关系信号；普通聊过一次天不算。",
+    "- plan：只保留当前主计划、当前活跃计划、计划完成、计划放弃、计划替换等状态级信息；不要记录计划微调和执行细节。",
+    "当信息不足、有歧义、无法确认是否具有长期价值时，必须选择丢弃。",
+    `输出要求：先给出 shouldWrite；如果不应写入，facts 必须为空数组，并在 discardReason 中说明原因；如果应写入，facts 最多 ${MAX_FACTS_PER_EPISODE} 条。`,
+    `输出要求补充：subject/predicate/object 必须简洁稳定，summary 使用中文，confidence 取 0-1；没有把握时降低 confidence，低置信度不要勉强输出。`,
     `episode_type=${episode.type}`,
     `subject_id=${episode.subjectId}`,
     `counterparty_id=${episode.counterpartyId ?? ""}`,
     `happened_at=${episode.happenedAt.toISOString()}`,
     `summary_text=${episode.summaryText}`,
-    `payload=${JSON.stringify(episode.payload, null, 2)}`,
+    `payload=${JSON.stringify(buildEpisodePayloadContext(episode), null, 2)}`,
   ].join("\n");
+}
+
+function normalizeFactText(value: string): string {
+  return value.trim();
+}
+
+/**
+ * 在 TS 侧做一层保守过滤，避免 prompt 漏网后把低价值事实直接写入图谱。
+ *
+ * 说明：
+ * - shouldWrite=false 时直接丢弃整批输出；
+ * - 低于置信度阈值的事实不写入；
+ * - 同一批次内如果 dedupeKey 重复，只保留第一条，降低重复写入概率。
+ */
+function filterExtractedFacts(
+  output: z.infer<typeof extractedFactSchema>,
+): z.infer<typeof extractedFactItemSchema>[] {
+  if (!output.shouldWrite) {
+    return [];
+  }
+
+  const keptFacts: z.infer<typeof extractedFactItemSchema>[] = [];
+  const seenDedupeKeys = new Set<string>();
+
+  for (const fact of output.facts) {
+    if (fact.confidence < MIN_FACT_CONFIDENCE) {
+      continue;
+    }
+
+    const dedupeKey = createFactDedupeKey([
+      fact.type,
+      normalizeFactText(fact.subject),
+      normalizeFactText(fact.predicate),
+      normalizeFactText(fact.object),
+    ]);
+    if (!dedupeKey || seenDedupeKeys.has(dedupeKey)) {
+      continue;
+    }
+
+    seenDedupeKeys.add(dedupeKey);
+    keptFacts.push(fact);
+  }
+
+  return keptFacts.slice(0, MAX_FACTS_PER_EPISODE);
 }
 
 function normalizeExtractedFacts(
@@ -102,14 +208,21 @@ function normalizeExtractedFacts(
     return [];
   }
 
-  return output.facts.map((fact) => ({
+  const filteredFacts = filterExtractedFacts(output);
+
+  return filteredFacts.map((fact) => ({
     id: createFactId(),
-    dedupeKey: createFactDedupeKey([fact.type, fact.subject, fact.predicate, fact.object]),
+    dedupeKey: createFactDedupeKey([
+      fact.type,
+      normalizeFactText(fact.subject),
+      normalizeFactText(fact.predicate),
+      normalizeFactText(fact.object),
+    ]),
     type: fact.type,
-    subject: fact.subject,
-    predicate: fact.predicate,
-    object: fact.object,
-    summary: fact.summary,
+    subject: normalizeFactText(fact.subject),
+    predicate: normalizeFactText(fact.predicate),
+    object: normalizeFactText(fact.object),
+    summary: normalizeFactText(fact.summary),
     confidence: fact.confidence,
     evidenceEpisodeId: episodeId,
     validAt: episode.happenedAt.toISOString(),

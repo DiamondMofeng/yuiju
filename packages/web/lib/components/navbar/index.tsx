@@ -19,9 +19,7 @@ export const Navbar = ({ showActivity = true }: NavbarProps) => {
   const activeLinkClass =
     "bg-[#91c4ee]/30 text-[#2b2f36] shadow-[inset_0_0_0_1px_rgba(145,196,238,0.25)]";
   const idleLinkClass = "text-[#6b7480] hover:bg-[#91c4ee]/20 hover:text-[#2b2f36]";
-  const visibleItems = showActivity
-    ? navItems
-    : navItems.filter((item) => item.key !== "activity");
+  const visibleItems = showActivity ? navItems : navItems.filter((item) => item.key !== "activity");
 
   return (
     <header className="sticky top-0 z-30 flex justify-center border-b border-[#d9e6f5]/80 bg-[#f7fbff]/80 px-3 py-3.5 backdrop-blur-md">

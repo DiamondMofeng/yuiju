@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { ActionId } from "@yuiju/utils";
 
 describe("Redis 状态初始化/格式化", () => {
   it("initCharacterStateData：Redis 为空时写入默认值并返回默认状态", async () => {
@@ -33,6 +34,7 @@ describe("Redis 状态初始化/格式化", () => {
       money: 0,
       dailyActionsDoneToday: [],
       inventory: [],
+      runningAction: null,
     });
 
     expect(redisInstance.hset).toHaveBeenCalledTimes(1);
@@ -76,6 +78,7 @@ describe("Redis 状态初始化/格式化", () => {
     expect(data.money).toBe(5);
     expect(data.dailyActionsDoneToday).toEqual([ActionId.Idle]);
     expect(data.inventory).toEqual([]);
+    expect(data.runningAction).toBeNull();
 
     expect(redisInstance.hset).not.toHaveBeenCalled();
   });
@@ -130,5 +133,39 @@ describe("Redis 状态初始化/格式化", () => {
 
     expect(typeof data.time.toISOString).toBe("function");
     expect(redisInstance.hset).toHaveBeenCalledTimes(1);
+  });
+
+  it("initCharacterStateData：runningAction 坏数据时回退为 null", async () => {
+    process.env.NODE_ENV = "development";
+
+    const redisInstance = {
+      hgetall: vi.fn(async () => ({
+        action: ActionId.Sleep,
+        runningAction: JSON.stringify({
+          action: "not_action",
+          actionStartedAt: "not-a-date",
+          actionDurationMinutes: "30",
+          waitUntil: "not-a-date",
+        }),
+      })),
+      hset: vi.fn(async () => 1),
+      hget: vi.fn(async () => null),
+      quit: vi.fn(async () => undefined),
+    };
+
+    vi.resetModules();
+    vi.doMock("ioredis", () => {
+      return {
+        default: function MockRedis() {
+          return redisInstance as any;
+        },
+      };
+    });
+
+    const { initCharacterStateData } = await import("../../../utils/src/redis");
+    const data = await initCharacterStateData();
+
+    expect(data.action).toBe(ActionId.Sleep);
+    expect(data.runningAction).toBeNull();
   });
 });

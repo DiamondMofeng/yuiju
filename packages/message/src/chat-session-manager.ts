@@ -1,11 +1,13 @@
 import type { MemoryServiceClient } from "@yuiju/utils";
-import { emitMemoryEpisode, getTimeWithWeekday, isDev } from "@yuiju/utils";
+import {
+  emitMemoryEpisode,
+  getTimeWithWeekday,
+  isDev,
+  processPendingMemoryEpisodes,
+} from "@yuiju/utils";
 import type { ModelMessage } from "ai";
 import dayjs from "dayjs";
-import {
-  buildConversationEpisode,
-  type UserWindowState,
-} from "./memory/episode-builder";
+import { buildConversationEpisode, type UserWindowState } from "./memory/episode-builder";
 
 type Role = "user" | "assistant";
 
@@ -163,6 +165,9 @@ export class ChatSessionManager {
 
     try {
       await emitMemoryEpisode(episode);
+      processPendingMemoryEpisodes({ limit: 1, isDev: this.isDev }).catch((error) => {
+        console.error("Failed to process pending memory episodes:", error);
+      });
 
       // 当前阶段只完成统一 Episode 建模，等待 Python 服务升级后再恢复真实写入。
       // if (!this.memoryClient) {

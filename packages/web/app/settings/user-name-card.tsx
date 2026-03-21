@@ -1,14 +1,14 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from "react";
 
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
-const STORAGE_KEY = 'yuiju:user_name';
-const DEFAULT_USER_NAME = '渺小久';
+const STORAGE_KEY = "yuiju:user_name";
+const DEFAULT_USER_NAME = "渺小久";
 
 export function UserNameCard() {
   const [userName, setUserName] = useState(DEFAULT_USER_NAME);
@@ -65,7 +65,7 @@ export function UserNameCard() {
             id="userNameInput"
             className="border-[#d9e6f5] bg-white/90 focus:border-[rgba(145,196,238,0.8)] focus:shadow-[0_0_0_4px_rgba(145,196,238,0.2)]"
             value={userName}
-            onChange={event => {
+            onChange={(event) => {
               setUserName(event.target.value);
             }}
           />
@@ -80,7 +80,9 @@ export function UserNameCard() {
           >
             保存
           </Button>
-          <span className="text-[12px] text-[#6b7480]">{hasChanges ? '有未保存的修改' : '已同步到本地'}</span>
+          <span className="text-[12px] text-[#6b7480]">
+            {hasChanges ? "有未保存的修改" : "已同步到本地"}
+          </span>
         </div>
       </div>
     </Card>

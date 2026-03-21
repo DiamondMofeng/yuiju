@@ -9,20 +9,34 @@ export type PlanScope = "main" | "active";
 /**
  * 计划状态。
  */
-export type PlanStatus = "active" | "completed" | "cancelled";
+export type PlanStatus = "active" | "completed" | "abandoned" | "superseded";
+
+/**
+ * 计划来源。
+ *
+ * - llm: 由 LLM 在 tick 决策阶段提出；
+ * - system: 由系统逻辑直接写入；
+ * - user: 预留给未来人工干预入口。
+ */
+export type PlanSource = "llm" | "system" | "user";
 
 /**
  * 计划项。
  *
  * 说明：
  * - id 由业务侧按标题与范围生成稳定标识；
- * - 当前阶段保持最小字段集，后续再扩展优先级、截止时间等属性。
+ * - parentPlanId 用于表达活跃计划挂靠到主计划的引用关系；
+ * - reason / source / expiresAt 为后续生命周期治理与记忆提炼保留稳定字段。
  */
 export interface PlanItem {
   id: string;
   title: string;
   scope: PlanScope;
   status: PlanStatus;
+  parentPlanId?: string;
+  reason?: string;
+  source: PlanSource;
+  expiresAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -31,6 +45,8 @@ export interface PlanItem {
  * Redis 中保存的当前计划真相源。
  */
 export interface PlanState {
+  mainPlanId?: string;
+  activePlanIds: string[];
   mainPlan?: PlanItem;
   activePlans: PlanItem[];
   updatedAt: string;
@@ -42,12 +58,16 @@ export interface PlanState {
 export interface PlanProposal {
   mainPlanTitle?: string;
   activePlanTitles?: string[];
+  reason?: string;
+  source?: PlanSource;
+  expiresAt?: string;
 }
 
 /**
  * 计划变更类型。
+ * superseded 被取代
  */
-export type PlanChangeType = "created" | "updated" | "completed" | "cancelled" | "replaced";
+export type PlanChangeType = "created" | "updated" | "completed" | "abandoned" | "superseded";
 
 /**
  * 单次计划变更记录。
@@ -72,4 +92,3 @@ export interface PlanApplyResult {
   changes: PlanChange[];
   relatedPlanId?: string;
 }
-

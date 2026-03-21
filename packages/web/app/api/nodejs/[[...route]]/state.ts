@@ -3,8 +3,9 @@ import {
   emitMemoryEpisode,
   getRedis,
   initCharacterStateData,
-  REDIS_KEY_CHARACTER_STATE,
   isDev,
+  processPendingMemoryEpisodes,
+  REDIS_KEY_CHARACTER_STATE,
 } from "@yuiju/utils";
 import { Hono } from "hono";
 import { rejectPublicRequest } from "./public-guard";
@@ -150,6 +151,9 @@ stateRoute.post("/allowance", async (context) => {
         delta,
         reason: reason || undefined,
       },
+    });
+    processPendingMemoryEpisodes({ limit: 1, isDev: isDev() }).catch((error) => {
+      console.error("Failed to process pending memory episodes:", error);
     });
   } catch (err) {
     try {

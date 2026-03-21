@@ -6,6 +6,7 @@ import {
   type ICharacterState,
   type InventoryItem,
   type Location,
+  type RunningActionState,
   getRedis,
   initCharacterStateData,
 } from "@yuiju/utils";
@@ -28,6 +29,8 @@ export class CharacterState implements ICharacterState {
   public dailyActionsDoneToday: ActionId[] = [];
   /** 背包物品列表 */
   public inventory: InventoryItem[] = [];
+  /** 当前运行中的 action 等待上下文 */
+  public runningAction: RunningActionState | null = null;
 
   static getInstance() {
     if (!CharacterState.instance) CharacterState.instance = new CharacterState();
@@ -45,6 +48,7 @@ export class CharacterState implements ICharacterState {
     this.money = data.money;
     this.dailyActionsDoneToday = [...data.dailyActionsDoneToday];
     this.inventory = [...(data.inventory ?? [])];
+    this.runningAction = data.runningAction;
   }
 
   async save() {
@@ -58,6 +62,7 @@ export class CharacterState implements ICharacterState {
       money: this.money,
       dailyActionsDoneToday: JSON.stringify(this.dailyActionsDoneToday),
       inventory: JSON.stringify(this.inventory),
+      runningAction: JSON.stringify(this.runningAction),
     });
   }
 
@@ -124,6 +129,37 @@ export class CharacterState implements ICharacterState {
   async clearDailyActions(): Promise<void> {
     this.dailyActionsDoneToday = [];
     await this.save();
+  }
+
+  /**
+   * 持久化运行中的 action 等待上下文。
+   *
+   * 使用场景：
+   * - 当 action 已完成即时状态写入，准备进入真实时间等待前调用；
+   * - 这样即使进程退出，也能在下次启动时恢复剩余等待时长。
+   */
+  async setRunningAction(runningAction: RunningActionState): Promise<void> {
+    this.runningAction = { ...runningAction };
+    await this.save();
+  }
+
+  /**
+   * 清理运行中的 action 等待上下文。
+   *
+   * 在等待完成并准备进入下一次 tick 前调用，避免下次启动重复恢复同一 action。
+   */
+  async clearRunningAction(): Promise<void> {
+    this.runningAction = null;
+    await this.save();
+  }
+
+  /**
+   * 获取当前运行中的 action 等待上下文。
+   *
+   * 返回内存中的深拷贝，避免调用方意外修改内部状态。
+   */
+  getRunningAction(): RunningActionState | null {
+    return this.runningAction ? cloneDeep(this.runningAction) : null;
   }
 
   /**
@@ -197,6 +233,7 @@ export class CharacterState implements ICharacterState {
       money: this.money,
       dailyActionsDoneToday: this.dailyActionsDoneToday,
       inventory: this.inventory,
+      runningAction: this.runningAction,
     });
   }
 }

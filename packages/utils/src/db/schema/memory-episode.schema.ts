@@ -64,7 +64,16 @@ const MemoryEpisodeSchema = new Schema<IMemoryEpisode>(
     },
     type: {
       type: String,
-      enum: ["behavior", "conversation", "plan_update", "system"],
+      enum: [
+        "behavior",
+        "conversation",
+        "plan_created",
+        "plan_updated",
+        "plan_completed",
+        "plan_abandoned",
+        "plan_superseded",
+        "system",
+      ],
       required: true,
       index: true,
     },
@@ -106,10 +115,27 @@ export interface GetRecentMemoryEpisodesOptions {
   limit?: number;
   types?: MemoryEpisodeType[];
   subjectId?: string;
+  counterpartyId?: string;
   isDev?: boolean;
+  /**
+   * 只查询某个自然日内的 Episode。
+   * 支持 `Date` 或 ISO 字符串。
+   */
+  onlyDate?: Date | string;
+  /**
+   * 兼容旧逻辑：只看今天。
+   * 说明：与 `onlyDate` 同时存在时，优先 `onlyDate`。
+   */
   onlyToday?: boolean;
   happenedAfter?: Date;
   happenedBefore?: Date;
+  sortDirection?: "asc" | "desc";
+}
+
+export interface GetPendingMemoryEpisodesOptions {
+  limit?: number;
+  statuses?: MemoryEpisodeExtractionStatus[];
+  isDev?: boolean;
 }
 
 /**
@@ -177,11 +203,56 @@ export async function updateMemoryEpisodeExtraction(
 }
 
 /**
+ * 批量查询待处理 Episode。
+ *
+ * 说明：
+ * - 默认只扫描 pending / failed 两类状态，便于异步补偿；
+ * - 返回顺序按发生时间正序，优先处理更早堆积的数据。
+ */
+export async function getPendingMemoryEpisodes(
+  options: GetPendingMemoryEpisodesOptions = {},
+): Promise<IMemoryEpisode[]> {
+  if (isMongoDisabled()) {
+    const store = getInMemoryEpisodeStore();
+    const statuses = new Set(options.statuses ?? ["pending", "failed"]);
+
+    let items = store.filter((item) => statuses.has(item.extractionStatus));
+    if (typeof options.isDev === "boolean") {
+      items = items.filter((item) => item.isDev === options.isDev);
+    }
+
+    items.sort((left, right) => {
+      const happenedDiff = left.happenedAt.getTime() - right.happenedAt.getTime();
+      if (happenedDiff !== 0) return happenedDiff;
+      return left.createdAt.getTime() - right.createdAt.getTime();
+    });
+
+    return items.slice(0, options.limit ?? 20) as any;
+  }
+
+  await connectDB();
+
+  const filter: Record<string, unknown> = {
+    extractionStatus: {
+      $in: options.statuses ?? ["pending", "failed"],
+    },
+  };
+  if (typeof options.isDev === "boolean") {
+    filter.isDev = options.isDev;
+  }
+
+  return await MemoryEpisodeModel.find(filter)
+    .sort({ happenedAt: 1, createdAt: 1 })
+    .limit(options.limit ?? 20)
+    .exec();
+}
+
+/**
  * 查询最近 Episode。
  *
  * 说明：
  * - 默认按发生时间倒序返回；
- * - onlyToday 用于兼容当前“只看今天最近行为”的既有逻辑。
+ * - onlyDate 用于按某个自然日过滤，适配“今天 / 昨天 / 前天”等快捷时间查询。
  */
 export async function getRecentMemoryEpisodes(
   options: GetRecentMemoryEpisodesOptions = {},
@@ -197,10 +268,21 @@ export async function getRecentMemoryEpisodes(
     if (options.subjectId) {
       items = items.filter((item) => item.subjectId === options.subjectId);
     }
+    if (options.counterpartyId) {
+      items = items.filter((item) => item.counterpartyId === options.counterpartyId);
+    }
     if (typeof options.isDev === "boolean") {
       items = items.filter((item) => item.isDev === options.isDev);
     }
-    if (isOnlyTodayOptions(options)) {
+    if (options.onlyDate) {
+      const startOfTargetDate = dayjs(options.onlyDate).startOf("day");
+      const startOfNextDate = startOfTargetDate.add(1, "day");
+      items = items.filter(
+        (item) =>
+          item.happenedAt >= startOfTargetDate.toDate() &&
+          item.happenedAt < startOfNextDate.toDate(),
+      );
+    } else if (isOnlyTodayOptions(options)) {
       const startOfToday = dayjs().startOf("day");
       const startOfTomorrow = startOfToday.add(1, "day");
       items = items.filter(
@@ -215,10 +297,12 @@ export async function getRecentMemoryEpisodes(
       });
     }
 
+    const sortDirection = options.sortDirection === "asc" ? 1 : -1;
     items.sort((left, right) => {
-      const happenedDiff = right.happenedAt.getTime() - left.happenedAt.getTime();
+      const happenedDiff =
+        sortDirection * (left.happenedAt.getTime() - right.happenedAt.getTime());
       if (happenedDiff !== 0) return happenedDiff;
-      return right.createdAt.getTime() - left.createdAt.getTime();
+      return sortDirection * (left.createdAt.getTime() - right.createdAt.getTime());
     });
 
     return items.slice(0, options.limit ?? 10) as any;
@@ -233,10 +317,20 @@ export async function getRecentMemoryEpisodes(
   if (options.subjectId) {
     filter.subjectId = options.subjectId;
   }
+  if (options.counterpartyId) {
+    filter.counterpartyId = options.counterpartyId;
+  }
   if (typeof options.isDev === "boolean") {
     filter.isDev = options.isDev;
   }
-  if (isOnlyTodayOptions(options)) {
+  if (options.onlyDate) {
+    const startOfTargetDate = dayjs(options.onlyDate).startOf("day");
+    const startOfNextDate = startOfTargetDate.add(1, "day");
+    filter.happenedAt = {
+      $gte: startOfTargetDate.toDate(),
+      $lt: startOfNextDate.toDate(),
+    };
+  } else if (isOnlyTodayOptions(options)) {
     const startOfToday = dayjs().startOf("day");
     const startOfTomorrow = startOfToday.add(1, "day");
     filter.happenedAt = {
@@ -253,8 +347,10 @@ export async function getRecentMemoryEpisodes(
     }
   }
 
+  const sortDirection = options.sortDirection === "asc" ? 1 : -1;
+
   return await MemoryEpisodeModel.find(filter)
-    .sort({ happenedAt: -1, createdAt: -1 })
+    .sort({ happenedAt: sortDirection, createdAt: sortDirection })
     .limit(options.limit ?? 10)
     .exec();
 }

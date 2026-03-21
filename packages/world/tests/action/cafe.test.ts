@@ -19,6 +19,16 @@ vi.mock("@/utils/logger", () => ({
   },
 }));
 
+vi.mock("@/plan", () => ({
+  planManager: {
+    getState: vi.fn(async () => ({
+      activePlanIds: [],
+      activePlans: [],
+      updatedAt: new Date(0).toISOString(),
+    })),
+  },
+}));
+
 const orderCoffeeAction = cafeAction.find((a) => a.action === ActionId.Order_Coffee);
 const drinkCoffeeAction = cafeAction.find((a) => a.action === ActionId.Drink_Coffee);
 const workAtCafeAction = cafeAction.find((a) => a.action === ActionId.Work_At_Cafe);
@@ -58,6 +68,7 @@ function createMockCharacterState(opts: {
     money: currentMoney,
     dailyActionsDoneToday: [],
     inventory: currentInventory,
+    runningAction: null,
 
     async setAction(action: ActionId) {
       currentAction = action;
@@ -97,6 +108,15 @@ function createMockCharacterState(opts: {
     },
     async markActionDoneToday(_action: ActionId) {},
     async clearDailyActions() {},
+    async setRunningAction(runningAction: any) {
+      this.runningAction = runningAction;
+    },
+    async clearRunningAction() {
+      this.runningAction = null;
+    },
+    getRunningAction() {
+      return this.runningAction;
+    },
     async addItem(item: Omit<InventoryItem, "quantity">, quantity: number = 1) {
       const existing = this.inventory.find((i: any) => i.name === item.name);
       if (existing) {

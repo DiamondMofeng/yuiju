@@ -6,6 +6,8 @@ import {
   emitMemoryEpisode,
   getRecentMemoryEpisodes,
   isDev,
+  processPendingMemoryEpisodes,
+  type RunningActionState,
 } from "@yuiju/utils";
 import { getActionList } from "@/action";
 import { getActionById } from "@/action/utils";
@@ -15,9 +17,6 @@ import { planManager } from "@/plan";
 import { characterState } from "@/state/character-state";
 import { worldState } from "@/state/world-state";
 import { logger } from "@/utils/logger";
-
-// 当前阶段先在调用侧统一 Episode 模型，暂不真正写入 Graphiti。
-// const memoryClient = getMemoryServiceClientFromEnv();
 
 export async function getDurationTime(
   durationMin:
@@ -45,6 +44,7 @@ export interface TickParams {
 export interface TickReturn {
   nextTickInMinutes: number;
   completionEvent?: string;
+  runningAction?: Omit<RunningActionState, "waitUntil">;
 }
 
 export async function tick(params: TickParams): Promise<TickReturn> {
@@ -76,7 +76,7 @@ export async function tick(params: TickParams): Promise<TickReturn> {
     types: ["behavior"],
     subjectId: DEFAULT_MEMORY_SUBJECT_ID,
     isDev: isDev(),
-    onlyToday: true,
+    onlyDate: new Date(),
   });
   const history = recentBehaviors.map((behavior) => ({
     behavior: String(behavior.payload.action ?? ActionId.Idle) as ActionId,
@@ -88,11 +88,21 @@ export async function tick(params: TickParams): Promise<TickReturn> {
   const actionMetadata = actionList.find((item) => item.action === selectedAction?.action);
 
   if (actionMetadata && selectedAction) {
-    const planApplyResult = await planManager.applyProposal({
-      mainPlanTitle: selectedAction.updateLongTermPlan,
-      activePlanTitles: selectedAction.updateShortTermPlan,
-    });
+    const actionStartedAt = new Date();
+    const planProposal: {
+      mainPlanTitle?: string;
+      activePlanTitles?: string[];
+    } = {};
+    if ("updateLongTermPlan" in selectedAction) {
+      planProposal.mainPlanTitle = selectedAction.updateLongTermPlan;
+    }
+    if ("updateShortTermPlan" in selectedAction) {
+      planProposal.activePlanTitles = selectedAction.updateShortTermPlan;
+    }
 
+    const planApplyResult = await planManager.applyProposal(planProposal);
+
+    // 根据 planApplyResult.changes 构建变更 episode
     const planEpisodes = buildPlanUpdateEpisodes({
       changes: planApplyResult.changes,
       happenedAt: new Date(),
@@ -103,6 +113,9 @@ export async function tick(params: TickParams): Promise<TickReturn> {
       try {
         await emitMemoryEpisode(planEpisode);
         logger.debug("[tick] built plan_update episode", planEpisode);
+        processPendingMemoryEpisodes({ limit: 1, isDev: isDev() }).catch((error) => {
+          logger.error("[tick] process pending memory episodes failed", error);
+        });
       } catch (error) {
         logger.error("[tick] write plan_update episode failed", error);
       }
@@ -121,11 +134,6 @@ export async function tick(params: TickParams): Promise<TickReturn> {
       selectedAction.durationMinute,
     );
 
-    const satietyDecay = Math.ceil((durationMin / 60) * 5);
-    if (satietyDecay > 0) {
-      await context.characterState.changeSatiety(-satietyDecay);
-    }
-
     const behaviorEpisode = buildBehaviorEpisode({
       context,
       selectedAction,
@@ -140,26 +148,9 @@ export async function tick(params: TickParams): Promise<TickReturn> {
       try {
         await emitMemoryEpisode(behaviorEpisode);
         logger.debug("[tick] built behavior episode", behaviorEpisode);
-
-        // 当前阶段只完成统一 Episode 建模，等待 Python 服务升级后再恢复真实写入。
-        // if (memoryClient) {
-        //   let description = selectedAction.reason;
-        //   if (executionResult) {
-        //     description += ` ${executionResult}`;
-        //   }
-        //
-        //   await memoryClient.writeEpisode({
-        //     is_dev: isDev(),
-        //     type: "ゆいじゅ的 Behavior",
-        //     reference_time: behaviorEpisode.happenedAt,
-        //     content: {
-        //       time: getTimeWithWeekday(dayjs(behaviorEpisode.happenedAt)),
-        //       action: selectedAction.action,
-        //       reason: description,
-        //       duration_minutes: `持续了${durationMin}分钟`,
-        //     },
-        //   });
-        // }
+        processPendingMemoryEpisodes({ limit: 1, isDev: isDev() }).catch((error) => {
+          logger.error("[tick] process pending memory episodes failed", error);
+        });
       } catch (e) {
         logger.error("[tick] build world_action episode failed", e);
       }
@@ -176,7 +167,16 @@ export async function tick(params: TickParams): Promise<TickReturn> {
       context.worldState.log(),
     );
 
-    return { nextTickInMinutes: durationMin, completionEvent };
+    return {
+      nextTickInMinutes: durationMin,
+      completionEvent,
+      runningAction: {
+        action: selectedAction.action,
+        actionStartedAt: actionStartedAt.toISOString(),
+        actionDurationMinutes: durationMin,
+        completionEvent,
+      },
+    };
   } else {
     const idleAction = getActionById(ActionId.Idle);
     logger.error("[tick] LLM selected action is not executable.", selectedAction);

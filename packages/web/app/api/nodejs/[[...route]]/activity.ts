@@ -1,11 +1,11 @@
 import {
   DEFAULT_MEMORY_SUBJECT_ID,
   getRecentMemoryEpisodes,
-  isDev,
   type IMemoryEpisode,
+  isDev,
 } from "@yuiju/utils";
-import dayjs from "dayjs";
 import { Hono } from "hono";
+import { mapEpisodeToActivityItem } from "@/lib/activity/activity-view";
 import { rejectPublicRequest } from "./public-guard";
 
 export const activityRoute = new Hono();
@@ -36,7 +36,16 @@ activityRoute.get("/activity", async (context) => {
   try {
     docs = await getRecentMemoryEpisodes({
       limit,
-      types: ["behavior", "system"],
+      types: [
+        "behavior",
+        "conversation",
+        "plan_created",
+        "plan_updated",
+        "plan_completed",
+        "plan_abandoned",
+        "plan_superseded",
+        "system",
+      ],
       subjectId: DEFAULT_MEMORY_SUBJECT_ID,
       isDev: isDev(),
       onlyToday: true,
@@ -49,13 +58,7 @@ activityRoute.get("/activity", async (context) => {
   const events = docs
     .slice()
     .reverse()
-    .map((item) => ({
-      time: dayjs(item.happenedAt).format("HH:mm"),
-      behavior: String(item.payload.action ?? item.payload.eventName ?? item.type),
-      desc: item.summaryText,
-      trigger: item.type === "system" ? "system" : "agent",
-      duration: Number(item.payload.durationMinutes ?? 0),
-    }));
+    .map((item) => mapEpisodeToActivityItem(item));
 
   return context.json({
     code: 0,

@@ -18,6 +18,14 @@ export interface MemorySearchItem {
   time?: string | null;
   source?: string | null;
   score?: number | null;
+  validFrom?: string | null;
+  validTo?: string | null;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  evidenceIds?: string[];
+  evidence_ids?: string[];
+  metadata?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 export class MemoryServiceClient {
@@ -48,7 +56,11 @@ export class MemoryServiceClient {
   }
 
   /**
-   * 检索相关记忆（默认返回服务端给出的结构列表）。
+   * 检索相关记忆。
+   *
+   * 说明：
+   * - 当前同时兼容旧版 Python 服务的简单结果结构；
+   * - 当服务端补充 evidence / metadata 后，调用方可直接消费这些字段。
    */
   async searchMemory(input: SearchMemoryInput): Promise<MemorySearchItem[]> {
     const res = await fetch(new URL("/v1/search", this.baseUrl), {

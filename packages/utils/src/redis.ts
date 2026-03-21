@@ -7,6 +7,7 @@ import {
   type Location,
   MajorScene,
   type PlanState,
+  type RunningActionState,
   type WorldStateData,
 } from "./types";
 import { safeParseJson } from "./utils";
@@ -43,9 +44,11 @@ const DEFAULT_CHARACTER_STATE_DATA: CharacterStateData = {
   money: 0,
   dailyActionsDoneToday: [],
   inventory: [],
+  runningAction: null,
 };
 
 const DEFAULT_PLAN_STATE: PlanState = {
+  activePlanIds: [],
   activePlans: [],
   updatedAt: new Date(0).toISOString(),
 };
@@ -56,6 +59,53 @@ const isActionId = (value: string): value is ActionId => {
 
 const isMajorScene = (value: unknown): value is MajorScene => {
   return typeof value === "string" && (Object.values(MajorScene) as string[]).includes(value);
+};
+
+const isValidIsoDateString = (value: unknown): value is string => {
+  return typeof value === "string" && dayjs(value).isValid();
+};
+
+const parseRunningActionState = (value: unknown): RunningActionState | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const maybeRunningAction = value as Partial<RunningActionState>;
+
+  if (!maybeRunningAction.action || !isActionId(maybeRunningAction.action)) {
+    return null;
+  }
+
+  if (!isValidIsoDateString(maybeRunningAction.actionStartedAt)) {
+    return null;
+  }
+
+  if (!isValidIsoDateString(maybeRunningAction.waitUntil)) {
+    return null;
+  }
+
+  if (
+    typeof maybeRunningAction.actionDurationMinutes !== "number" ||
+    !Number.isFinite(maybeRunningAction.actionDurationMinutes) ||
+    maybeRunningAction.actionDurationMinutes < 0
+  ) {
+    return null;
+  }
+
+  if (
+    maybeRunningAction.completionEvent !== undefined &&
+    typeof maybeRunningAction.completionEvent !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    action: maybeRunningAction.action,
+    actionStartedAt: maybeRunningAction.actionStartedAt,
+    actionDurationMinutes: maybeRunningAction.actionDurationMinutes,
+    waitUntil: maybeRunningAction.waitUntil,
+    completionEvent: maybeRunningAction.completionEvent,
+  };
 };
 
 export const initCharacterStateData = async (): Promise<CharacterStateData> => {
@@ -72,6 +122,7 @@ export const initCharacterStateData = async (): Promise<CharacterStateData> => {
       money: DEFAULT_CHARACTER_STATE_DATA.money,
       dailyActionsDoneToday: JSON.stringify(DEFAULT_CHARACTER_STATE_DATA.dailyActionsDoneToday),
       inventory: JSON.stringify(DEFAULT_CHARACTER_STATE_DATA.inventory ?? []),
+      runningAction: JSON.stringify(DEFAULT_CHARACTER_STATE_DATA.runningAction),
     });
 
     return { ...DEFAULT_CHARACTER_STATE_DATA };
@@ -81,6 +132,7 @@ export const initCharacterStateData = async (): Promise<CharacterStateData> => {
     ...DEFAULT_CHARACTER_STATE_DATA,
     dailyActionsDoneToday: [...DEFAULT_CHARACTER_STATE_DATA.dailyActionsDoneToday],
     inventory: [...(DEFAULT_CHARACTER_STATE_DATA.inventory ?? [])],
+    runningAction: DEFAULT_CHARACTER_STATE_DATA.runningAction,
   };
 
   if (raw.action && isActionId(raw.action)) {
@@ -139,6 +191,11 @@ export const initCharacterStateData = async (): Promise<CharacterStateData> => {
     }
   }
 
+  if (raw.runningAction) {
+    const parsedRunningAction = safeParseJson<unknown>(raw.runningAction);
+    state.runningAction = parseRunningActionState(parsedRunningAction);
+  }
+
   return state;
 };
 
@@ -155,23 +212,35 @@ export const initPlanStateData = async (): Promise<PlanState> => {
 
   if (!raw) {
     await redis.set(REDIS_KEY_PLAN_STATE, JSON.stringify(DEFAULT_PLAN_STATE));
-    return { ...DEFAULT_PLAN_STATE, activePlans: [] };
+    return { ...DEFAULT_PLAN_STATE, activePlanIds: [], activePlans: [] };
   }
 
-  const parsed = safeParseJson<unknown>(raw);
+  const parsed = safeParseJson<PlanState>(raw);
   if (!parsed || typeof parsed !== "object") {
     await redis.set(REDIS_KEY_PLAN_STATE, JSON.stringify(DEFAULT_PLAN_STATE));
-    return { ...DEFAULT_PLAN_STATE, activePlans: [] };
+    return { ...DEFAULT_PLAN_STATE, activePlanIds: [], activePlans: [] };
   }
 
   const maybeState = parsed as Partial<PlanState>;
   const activePlans = Array.isArray(maybeState.activePlans) ? maybeState.activePlans : [];
+  const mainPlan = maybeState.mainPlan;
+  const mainPlanId =
+    typeof maybeState.mainPlanId === "string" ? maybeState.mainPlanId : maybeState.mainPlan?.id;
+  const activePlanIds = Array.isArray(maybeState.activePlanIds)
+    ? maybeState.activePlanIds.filter((item): item is string => typeof item === "string")
+    : activePlans
+        .map((plan) => (typeof plan?.id === "string" ? plan.id : undefined))
+        .filter((item): item is string => Boolean(item));
 
   return {
-    mainPlan: maybeState.mainPlan,
+    mainPlanId,
+    activePlanIds,
+    mainPlan,
     activePlans,
     updatedAt:
-      typeof maybeState.updatedAt === "string" ? maybeState.updatedAt : DEFAULT_PLAN_STATE.updatedAt,
+      typeof maybeState.updatedAt === "string"
+        ? maybeState.updatedAt
+        : DEFAULT_PLAN_STATE.updatedAt,
   };
 };
 
