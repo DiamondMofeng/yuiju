@@ -1,22 +1,21 @@
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
-import { getRecentMemoryEpisodes } from "../db";
+import { getYuijuConfig } from "../config";
+import { getMemoryDiaries, getRecentMemoryEpisodes } from "../db";
 import { isDev } from "../env";
-import { initPlanStateData } from "../redis";
+import { rerankEpisodesWithSiliconFlow } from "../llm/rerank";
+import { DEFAULT_DIARY_SUBJECT } from "./diary";
 import { DEFAULT_MEMORY_SUBJECT_ID } from "./episode";
 import { getMemoryServiceClientFromEnv, type MemorySearchItem } from "./memory-service-client";
-import { rerankEpisodesWithSiliconFlow } from "./rerank";
 
 dayjs.extend(customParseFormat);
 
-export type MemoryQueryType = "episode" | "fact" | "plan";
-export type MemoryQueryTimeRange = "today" | "yesterday" | "day_before_yesterday";
+export type MemoryQueryType = "episode" | "diary" | "fact";
 export type MemoryQueryTimeSort = "asc" | "desc";
 
 export interface MemorySearchInput {
   query: string;
   memoryType: MemoryQueryType;
-  timeRange?: MemoryQueryTimeRange;
   startTime?: string;
   endTime?: string;
   timeSort?: MemoryQueryTimeSort;
@@ -25,7 +24,7 @@ export interface MemorySearchInput {
 }
 
 export interface MemorySearchResult {
-  source: "episode" | "fact" | "plan";
+  source: "episode" | "diary" | "fact";
   score: number;
   summary: string;
   happenedAt?: string;
@@ -33,10 +32,6 @@ export interface MemorySearchResult {
   validTo?: string;
   evidenceIds: string[];
   metadata?: Record<string, unknown>;
-}
-
-interface MemoryQueryRouter {
-  search(input: MemorySearchInput): Promise<MemorySearchResult[]>;
 }
 
 const DEFAULT_TOP_K = 5;
@@ -47,7 +42,6 @@ const MEMORY_TIME_FORMAT = "YYYY-MM-DD HH:mm:ss";
 interface NormalizedMemorySearchInput {
   query: string;
   memoryType: MemoryQueryType;
-  timeRange?: MemoryQueryTimeRange;
   startTime: string;
   endTime: string;
   timeSort: MemoryQueryTimeSort;
@@ -70,7 +64,6 @@ function normalizeInput(input: MemorySearchInput): NormalizedMemorySearchInput {
   return {
     query: input.query.trim(),
     memoryType: input.memoryType,
-    timeRange: input.timeRange,
     startTime: normalizedStartTime,
     endTime: normalizedEndTime,
     timeSort: input.timeSort ?? "desc",
@@ -108,25 +101,39 @@ function scoreEpisode(query: string, summaryText: string): number {
   return score;
 }
 
-function scorePlan(query: string, title: string): number {
-  const score = scoreEpisode(query, title);
-  return score > 0 ? score : 1;
-}
-
-function getTimeRangeBounds(input: {
-  timeRange?: MemoryQueryTimeRange;
-  startTime?: string;
-  endTime?: string;
-}): {
-  happenedAfter?: Date;
-  happenedBefore?: Date;
-  onlyDate?: Date;
+function normalizeDayRange(input: { startTime?: string; endTime?: string }): {
+  startDay?: Date;
+  endDay?: Date;
 } {
-  // 精确时间优先于快捷时间；若 LLM 仅填对一侧，则退化为单边时间过滤。
   const parsedStartTime = parseMemoryTime(input.startTime ?? "");
   const parsedEndTime = parseMemoryTime(input.endTime ?? "");
 
+  return {
+    startDay: parsedStartTime ? dayjs(parsedStartTime).startOf("day").toDate() : undefined,
+    endDay: parsedEndTime ? dayjs(parsedEndTime).startOf("day").toDate() : undefined,
+  };
+}
+
+function isToday(value: Date): boolean {
+  return dayjs(value).isSame(dayjs(), "day");
+}
+
+function resolveEpisodeTimeFilter(input: NormalizedMemorySearchInput): {
+  onlyDate?: Date;
+  happenedAfter?: Date;
+  happenedBefore?: Date;
+} | null {
+  const parsedStartTime = parseMemoryTime(input.startTime);
+  const parsedEndTime = parseMemoryTime(input.endTime);
+
   if (parsedStartTime || parsedEndTime) {
+    const candidates = [parsedStartTime, parsedEndTime].filter((value): value is Date =>
+      Boolean(value),
+    );
+    if (candidates.some((value) => !isToday(value))) {
+      return null;
+    }
+
     let happenedAfter = parsedStartTime;
     let happenedBefore = parsedEndTime;
 
@@ -140,25 +147,44 @@ function getTimeRangeBounds(input: {
     };
   }
 
-  if (input.timeRange === "today") {
+  return {
+    onlyDate: dayjs().toDate(),
+  };
+}
+
+function resolveDiaryTimeFilter(input: NormalizedMemorySearchInput): {
+  onlyDate?: Date;
+  diaryDateAfter?: Date;
+  diaryDateBefore?: Date;
+} | null {
+  const dayRange = normalizeDayRange(input);
+
+  if (dayRange.startDay || dayRange.endDay) {
+    const candidates = [dayRange.startDay, dayRange.endDay].filter((value): value is Date =>
+      Boolean(value),
+    );
+    if (candidates.some((value) => isToday(value))) {
+      return null;
+    }
+
+    let diaryDateAfter = dayRange.startDay;
+    let diaryDateBefore = dayRange.endDay
+      ? dayjs(dayRange.endDay).add(1, "day").toDate()
+      : undefined;
+
+    if (diaryDateAfter && diaryDateBefore && diaryDateAfter > diaryDateBefore) {
+      [diaryDateAfter, diaryDateBefore] = [diaryDateBefore, diaryDateAfter];
+    }
+
     return {
-      onlyDate: dayjs().toDate(),
+      diaryDateAfter,
+      diaryDateBefore,
     };
   }
 
-  if (input.timeRange === "yesterday") {
-    return {
-      onlyDate: dayjs().subtract(1, "day").toDate(),
-    };
-  }
-
-  if (input.timeRange === "day_before_yesterday") {
-    return {
-      onlyDate: dayjs().subtract(2, "day").toDate(),
-    };
-  }
-
-  return {};
+  return {
+    diaryDateBefore: dayjs().startOf("day").toDate(),
+  };
 }
 
 function getPlanIdFromPayload(payload: Record<string, unknown> | undefined): string | null {
@@ -245,13 +271,13 @@ function compareResultsByScoreAndTime(
 function buildEpisodeRerankDocument(doc: {
   summaryText: string;
   type: string;
-  counterpartyId?: string;
+  counterparty?: string;
   payload?: Record<string, unknown>;
 }): string {
   const action =
     typeof doc.payload?.action === "string" ? `行为: ${doc.payload.action}` : undefined;
   const planId = getPlanIdFromPayload(doc.payload);
-  const counterparty = doc.counterpartyId ? `对象: ${doc.counterpartyId}` : undefined;
+  const counterparty = doc.counterparty ? `对象: ${doc.counterparty}` : undefined;
 
   return [
     doc.summaryText,
@@ -273,12 +299,16 @@ function buildEpisodeRerankDocument(doc: {
  */
 export async function searchEpisodes(input: MemorySearchInput): Promise<MemorySearchResult[]> {
   const normalized = normalizeInput(input);
-  const timeRangeFilter = getTimeRangeBounds(normalized);
+  const timeRangeFilter = resolveEpisodeTimeFilter(normalized);
+  if (!timeRangeFilter) {
+    return [];
+  }
+
   const docs = await getRecentMemoryEpisodes({
     limit: Math.max(normalized.topK, EPISODE_SEARCH_LIMIT),
-    subjectId: DEFAULT_MEMORY_SUBJECT_ID,
+    subject: DEFAULT_MEMORY_SUBJECT_ID,
     isDev: isDev(),
-    counterpartyId: normalized.counterpartyName || undefined,
+    counterparty: normalized.counterpartyName || undefined,
     sortDirection: normalized.timeSort,
     ...timeRangeFilter,
   });
@@ -326,7 +356,7 @@ export async function searchEpisodes(input: MemorySearchInput): Promise<MemorySe
   if (
     normalized.query &&
     candidates.length > EPISODE_RERANK_THRESHOLD &&
-    process.env.SILICONFLOW_API_KEY?.trim()
+    getYuijuConfig().llm.siliconflowApiKey.trim()
   ) {
     const reranked = await rerankEpisodesWithSiliconFlow({
       query: normalized.query,
@@ -340,6 +370,45 @@ export async function searchEpisodes(input: MemorySearchInput): Promise<MemorySe
   }
 
   return candidates.slice(0, normalized.topK).map((candidate) => candidate.result);
+}
+
+/**
+ * 查询 Diary 回忆。
+ *
+ * 说明：
+ * - Diary 只负责昨天及更早的“经历回忆”；
+ * - 结果直接返回完整日记正文，保持叙事感，不额外拆摘要字段。
+ */
+export async function searchDiaries(input: MemorySearchInput): Promise<MemorySearchResult[]> {
+  const normalized = normalizeInput(input);
+  const timeFilter = resolveDiaryTimeFilter(normalized);
+  if (!timeFilter) {
+    return [];
+  }
+
+  const diaries = await getMemoryDiaries({
+    limit: Math.max(normalized.topK, 20),
+    subject: DEFAULT_DIARY_SUBJECT,
+    isDev: isDev(),
+    sortDirection: normalized.timeSort,
+    ...timeFilter,
+  });
+
+  return diaries
+    .map((diary) => ({
+      source: "diary" as const,
+      score: scoreEpisode(normalized.query, diary.text),
+      summary: diary.text,
+      happenedAt: dayjs(diary.diaryDate).toISOString(),
+      evidenceIds: [String(diary._id)],
+      metadata: {
+        subject: diary.subject,
+        displayDate: dayjs(diary.diaryDate).format("YYYY-MM-DD"),
+      },
+    }))
+    .filter((item) => item.score > 0 || !normalized.query)
+    .sort((left, right) => compareResultsByScoreAndTime(left, right, normalized.timeSort))
+    .slice(0, normalized.topK);
 }
 
 /**
@@ -378,54 +447,7 @@ export async function searchFacts(input: MemorySearchInput): Promise<MemorySearc
     .slice(0, normalized.topK);
 }
 
-/**
- * 查询当前计划状态。
- *
- * 说明：
- * - 计划读取直接以 Redis plan_state 为准；
- * - 返回 planId 作为 evidenceIds，便于后续与计划历史串联。
- */
-export async function searchPlans(input: MemorySearchInput): Promise<MemorySearchResult[]> {
-  const normalized = normalizeInput(input);
-  const planState = await initPlanStateData();
-  const items: MemorySearchResult[] = [];
-
-  if (planState.mainPlan) {
-    items.push({
-      source: "plan",
-      score: scorePlan(normalized.query, planState.mainPlan.title),
-      summary: `当前主计划：${planState.mainPlan.title}`,
-      happenedAt: planState.mainPlan.updatedAt,
-      evidenceIds: [planState.mainPlan.id],
-      metadata: {
-        planId: planState.mainPlan.id,
-        scope: planState.mainPlan.scope,
-        status: planState.mainPlan.status,
-      },
-    });
-  }
-
-  for (const plan of planState.activePlans) {
-    items.push({
-      source: "plan",
-      score: scorePlan(normalized.query, plan.title),
-      summary: `当前活跃计划：${plan.title}`,
-      happenedAt: plan.updatedAt,
-      evidenceIds: [plan.id],
-      metadata: {
-        planId: plan.id,
-        scope: plan.scope,
-        status: plan.status,
-      },
-    });
-  }
-
-  return items
-    .sort((left, right) => compareResultsByScoreAndTime(left, right, normalized.timeSort))
-    .slice(0, normalized.topK);
-}
-
-class DefaultMemoryQueryRouter implements MemoryQueryRouter {
+class MemoryQueryRouter {
   async search(input: MemorySearchInput): Promise<MemorySearchResult[]> {
     const normalized = normalizeInput(input);
 
@@ -433,16 +455,16 @@ class DefaultMemoryQueryRouter implements MemoryQueryRouter {
       return await searchEpisodes(normalized);
     }
 
-    if (normalized.memoryType === "fact") {
-      return await searchFacts(normalized);
+    if (normalized.memoryType === "diary") {
+      return await searchDiaries(normalized);
     }
 
-    if (normalized.memoryType === "plan") {
-      return await searchPlans(normalized);
+    if (normalized.memoryType === "fact") {
+      return await searchFacts(normalized);
     }
 
     return [];
   }
 }
 
-export const memoryQueryRouter: MemoryQueryRouter = new DefaultMemoryQueryRouter();
+export const memoryQueryRouter: MemoryQueryRouter = new MemoryQueryRouter();

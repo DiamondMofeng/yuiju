@@ -25,13 +25,13 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // 核心逻辑：对外展示环境隐藏「动态」入口。
-  const showActivity = !isPublicDeployment();
+  // 核心逻辑：对外展示环境隐藏内部观测页入口。
+  const showInternalPages = !isPublicDeployment();
 
   return (
     <html lang="zh-CN">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <Navbar showActivity={showActivity} />
+        <Navbar showActivity={showInternalPages} showDiary={showInternalPages} />
         <div>{children}</div>
         <Toaster />
       </body>

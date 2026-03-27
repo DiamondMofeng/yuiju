@@ -1,4 +1,3 @@
-import "@yuiju/utils/env";
 import * as readline from "node:readline";
 import { connectDB } from "@yuiju/utils";
 import { llmManager } from "./llm/manager";

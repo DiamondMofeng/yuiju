@@ -170,3 +170,4 @@ NODE_ENV=development | production
 1. **Redis 依赖**：开发过程中需要运行 Redis 服务器
 2. **MongoDB 依赖**：需要运行 MongoDB 服务器
 3. **LLM API 依赖**：需要配置有效的 DeepSeek API 密钥
+4. 当前项目处于早期开发阶段，在进行技术方案设计时，请不用考虑历史逻辑的兼容性，按照最佳方案设计。

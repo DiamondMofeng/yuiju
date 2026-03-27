@@ -218,9 +218,7 @@ export function ActivityTimelineCard({ events, selectedId, onSelect }: ActivityT
 
                   <div className="flex items-center justify-between gap-3 text-[12px] text-[#6b7480]">
                     <span>{item.dateLabel}</span>
-                    <span>
-                      重要度 {item.importance.toFixed(2)} · {item.extractionStatus}
-                    </span>
+                    <span>{item.extractionStatus}</span>
                   </div>
                 </button>
               );

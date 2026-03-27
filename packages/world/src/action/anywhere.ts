@@ -8,6 +8,7 @@ import {
 import { chooseFoodAgent } from "@/llm/agent";
 import { planManager } from "@/plan";
 import { logger } from "@/utils/logger";
+import { resolveFoodRecoveryPerUnit } from "../utils/food-utils";
 import { notDoneToday } from "./utils";
 
 function getAvailableFoodParameters(context: ActionContext) {
@@ -57,7 +58,8 @@ export const anywhereAction: ActionMetadata[] = [
   },
   {
     action: ActionId.Eat_Item,
-    description: "吃食物。[饱腹+?][耗时10分钟]（可调用 queryAvailableFood 查看可用食物）",
+    description:
+      "吃食物。[体力+?][饱腹+?][心情+?][耗时10分钟]（可调用 queryAvailableFood 查看可用食物）",
     precondition: (context) => {
       return allTrue([
         () => {
@@ -108,20 +110,27 @@ export const anywhereAction: ActionMetadata[] = [
           continue;
         }
 
-        // 恢复体力（按数量累加）
-        const staminaPerUnit = selectedFood.extra?.stamina || 10;
+        // 统一通过 metadata 解析收益，避免购买时配置的 mood/satiety 在消费时丢失。
+        const { stamina, satiety, mood } = resolveFoodRecoveryPerUnit(selectedFood.extra);
+        const staminaPerUnit = stamina;
         const totalStamina = staminaPerUnit * quantity;
-        await context.characterState.changeStamina(totalStamina);
+        if (totalStamina !== 0) {
+          await context.characterState.changeStamina(totalStamina);
+        }
 
-        const satietyPerUnit =
-          selectedFood.extra?.satiety ?? Math.max(1, Math.round(staminaPerUnit * 2));
+        const satietyPerUnit = satiety;
         const totalSatiety = satietyPerUnit * quantity;
-        await context.characterState.changeSatiety(totalSatiety);
+        if (totalSatiety !== 0) {
+          await context.characterState.changeSatiety(totalSatiety);
+        }
 
-        await context.characterState.changeMood(quantity);
+        const totalMood = mood * quantity;
+        if (totalMood !== 0) {
+          await context.characterState.changeMood(totalMood);
+        }
 
         logger.info(
-          `[Eat_Item] 成功消费 ${selectedFood.value} x${quantity}，恢复 ${totalStamina} 点体力，恢复 ${totalSatiety} 点饱腹`,
+          `[Eat_Item] 成功消费 ${selectedFood.value} x${quantity}，恢复 ${totalStamina} 点体力，恢复 ${totalSatiety} 点饱腹，恢复 ${totalMood} 点心情`,
         );
 
         eatenSummary.push(`${selectedFood.value}${quantity}个`);

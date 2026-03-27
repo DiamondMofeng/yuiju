@@ -32,7 +32,7 @@ export type Location =
  */
 export interface FoodMetadata {
   /** 体力恢复值 */
-  stamina: number;
+  stamina?: number;
   /** 饱腹度恢复值 */
   satiety?: number;
   /** 心情恢复值 */

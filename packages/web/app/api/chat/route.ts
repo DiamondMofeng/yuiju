@@ -1,8 +1,5 @@
-import "@yuiju/utils/env";
-
-import { deepseek } from "@ai-sdk/deepseek";
 import { getCharacterCardPrompt } from "@yuiju/source";
-import { getRedis } from "@yuiju/utils";
+import { deepseekProvider, getRedis, getYuijuConfig } from "@yuiju/utils";
 import { convertToModelMessages, stepCountIs, streamText, type UIMessage } from "ai";
 import { isPublicDeployment } from "@/lib/public-deployment";
 
@@ -92,12 +89,14 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 export async function POST(request: Request) {
-  if (!process.env.DEEPSEEK_API_KEY) {
+  const config = getYuijuConfig();
+
+  if (!config.llm.deepseekApiKey.trim()) {
     return Response.json(
       {
         code: 503,
         data: null,
-        message: "DEEPSEEK_API_KEY is not configured",
+        message: "yuiju.config.ts 中未配置 llm.deepseekApiKey",
       },
       { status: 503 },
     );
@@ -164,7 +163,7 @@ export async function POST(request: Request) {
   const systemPrompt = getCharacterCardPrompt({ userName });
 
   const result = await streamText({
-    model: deepseek("deepseek-chat"),
+    model: deepseekProvider("deepseek-chat"),
     messages: modelMessages,
     system: systemPrompt,
     stopWhen: stepCountIs(5),

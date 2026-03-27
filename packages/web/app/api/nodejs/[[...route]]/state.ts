@@ -137,10 +137,9 @@ stateRoute.post("/allowance", async (context) => {
     await emitMemoryEpisode({
       source: "system",
       type: "system",
-      subjectId: DEFAULT_MEMORY_SUBJECT_ID,
+      subject: DEFAULT_MEMORY_SUBJECT_ID,
       happenedAt: new Date(),
       summaryText: reason ? `${descriptionBase}；原因：${reason}` : descriptionBase,
-      importance: 0.5,
       extractionStatus: "pending",
       isDev: isDev(),
       payload: {

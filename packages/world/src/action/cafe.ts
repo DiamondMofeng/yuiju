@@ -10,6 +10,7 @@ import {
 import { chooseCafeCoffeeAgent } from "@/llm/agent";
 import { planManager } from "@/plan";
 import { logger } from "@/utils/logger";
+import { buildFoodMetadata } from "../utils/food-utils";
 
 const CAFE_MIN_PRICE = Math.min(...CAFE_COFFEES.map((p) => p.price));
 
@@ -114,7 +115,12 @@ export const cafeAction: ActionMetadata[] = [
           name: coffee.name,
           description: coffee.description,
           category: "food",
-          metadata: { stamina: coffee.stamina, satiety: 2 },
+          metadata: buildFoodMetadata({
+            stamina: coffee.stamina,
+            satiety: coffee.satiety,
+            mood: coffee.mood,
+            fallbackSatiety: 2,
+          }),
         },
         1,
       );
@@ -168,7 +174,7 @@ export const cafeAction: ActionMetadata[] = [
   {
     action: ActionId.Work_At_Cafe,
     // TODO：没有饱腹度变化
-    description: "在咖啡店打工。[金币+200][体力-10][心情-5][耗时60分钟]",
+    description: "在咖啡店打工。[金币+200][体力-6][心情-2][耗时60分钟]",
     precondition(context) {
       return allTrue([
         () => isAtCafe(context.characterState.location.major),
@@ -178,35 +184,35 @@ export const cafeAction: ActionMetadata[] = [
     async executor(context) {
       await context.characterState.setAction(ActionId.Work_At_Cafe);
       await context.characterState.changeMoney(200);
-      await context.characterState.changeStamina(-10);
-      await context.characterState.changeMood(-5);
+      await context.characterState.changeStamina(-6);
+      await context.characterState.changeMood(-2);
       return "打工1小时，赚了200元";
     },
     durationMin: 60,
   },
   {
     action: ActionId.Go_Home_From_Cafe,
-    description: "从咖啡店回家。[体力-5][耗时20分钟]",
+    description: "从咖啡店回家。[体力-3][耗时20分钟]",
     precondition(context) {
       return isAtCafe(context.characterState.location.major);
     },
     async executor(context) {
       await context.characterState.setAction(ActionId.Go_Home_From_Cafe);
       await context.characterState.setLocation({ major: MajorScene.Home });
-      await context.characterState.changeStamina(-5);
+      await context.characterState.changeStamina(-3);
     },
     durationMin: 20,
   },
   {
     action: ActionId.Go_To_School_From_Cafe,
-    description: "从咖啡店去学校。[体力-5][耗时10分钟]",
+    description: "从咖啡店去学校。[体力-3][耗时10分钟]",
     precondition(context) {
       return isAtCafe(context.characterState.location.major);
     },
     async executor(context) {
       await context.characterState.setAction(ActionId.Go_To_School_From_Cafe);
       await context.characterState.setLocation({ major: MajorScene.School });
-      await context.characterState.changeStamina(-5);
+      await context.characterState.changeStamina(-3);
     },
     durationMin: 10,
   },

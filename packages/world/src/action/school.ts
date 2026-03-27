@@ -5,7 +5,7 @@ export const schoolAction: ActionMetadata[] = [
   {
     // TODO：逻辑优化，上课时间应该是固定的时间段，而不是随时可以上课
     action: ActionId.Study_At_School,
-    description: "在学校上课。[体力-20][饱腹-20][心情-5][耗时动态]",
+    description: "在学校上课。[体力-12][饱腹-12][心情-2][耗时动态]",
     precondition(context) {
       return allTrue([
         () => {
@@ -18,9 +18,9 @@ export const schoolAction: ActionMetadata[] = [
     },
     async executor(context) {
       await context.characterState.setAction(ActionId.Study_At_School);
-      await context.characterState.changeStamina(-20);
-      await context.characterState.changeSatiety(-20);
-      await context.characterState.changeMood(-5);
+      await context.characterState.changeStamina(-12);
+      await context.characterState.changeSatiety(-12);
+      await context.characterState.changeMood(-2);
     },
     durationMin: async (context) => {
       const now = context.worldState.time.clone();
@@ -37,7 +37,7 @@ export const schoolAction: ActionMetadata[] = [
   },
   {
     action: ActionId.Go_Home_From_School,
-    description: "从学校回家。[体力-10][饱腹-5][耗时30分钟]",
+    description: "从学校回家。[体力-7][饱腹-4][耗时30分钟]",
     precondition(context) {
       return allTrue([context.characterState.stamina >= 10, isAfternoon(context)]);
     },
@@ -47,14 +47,14 @@ export const schoolAction: ActionMetadata[] = [
         major: MajorScene.Home,
       });
 
-      await context.characterState.changeStamina(-10);
-      await context.characterState.changeSatiety(-5);
+      await context.characterState.changeStamina(-7);
+      await context.characterState.changeSatiety(-4);
     },
     durationMin: 30,
   },
   {
     action: ActionId.Go_To_Shop_From_School,
-    description: "从学校前往商店。[体力-5][饱腹-3][耗时10分钟]",
+    description: "从学校前往商店。[体力-3][饱腹-2][耗时10分钟]",
     precondition(context) {
       return context.characterState.stamina >= 5 && !isNight(context);
     },
@@ -64,16 +64,16 @@ export const schoolAction: ActionMetadata[] = [
         major: MajorScene.Shop,
       });
 
-      await context.characterState.changeStamina(-5);
-      await context.characterState.changeSatiety(-3);
+      await context.characterState.changeStamina(-3);
+      await context.characterState.changeSatiety(-2);
     },
     durationMin: 10,
   },
   {
     action: ActionId.Go_To_Cafe_From_School,
-    description: "从学校去咖啡店。[体力-5][饱腹-3][耗时10分钟]",
+    description: "从学校去咖啡店。[体力-3][饱腹-2][耗时10分钟]",
     precondition(context) {
-      return context.characterState.stamina >= 5 && !isNight(context);
+      return allTrue([context.characterState.stamina >= 5, !isNight(context)]);
     },
     async executor(context) {
       await context.characterState.setAction(ActionId.Go_To_Cafe_From_School);
@@ -81,8 +81,8 @@ export const schoolAction: ActionMetadata[] = [
         major: MajorScene.Cafe,
       });
 
-      await context.characterState.changeStamina(-5);
-      await context.characterState.changeSatiety(-3);
+      await context.characterState.changeStamina(-3);
+      await context.characterState.changeSatiety(-2);
     },
     durationMin: 10,
   },

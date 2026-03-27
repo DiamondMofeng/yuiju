@@ -4,20 +4,20 @@ place SCHOOL "学校"
 place SHOP "商店"
 place CAFE "咖啡店"
 
-link HOME -> SCHOOL (timeMinutes=30, stamina=-10, satiety=-5, dir=N)
-link SCHOOL -> HOME (timeMinutes=30, stamina=-10, satiety=-5, dir=S)
+link HOME -> SCHOOL (timeMinutes=30, stamina=-7, satiety=-4, dir=N)
+link SCHOOL -> HOME (timeMinutes=30, stamina=-7, satiety=-4, dir=S)
 
-link HOME -> SHOP (timeMinutes=20, stamina=-8, satiety=-5, dir=NE)
-link SHOP -> HOME (timeMinutes=20, stamina=-8, satiety=-5, dir=SW)
+link HOME -> SHOP (timeMinutes=20, stamina=-5, satiety=-3, dir=NE)
+link SHOP -> HOME (timeMinutes=20, stamina=-5, satiety=-3, dir=SW)
 
-link HOME -> CAFE (timeMinutes=20, stamina=-8, satiety=-5, dir=NW)
-link CAFE -> HOME (timeMinutes=20, stamina=-5, dir=SE)
+link HOME -> CAFE (timeMinutes=20, stamina=-5, satiety=-3, dir=NW)
+link CAFE -> HOME (timeMinutes=20, stamina=-3, dir=SE)
 
-link SCHOOL -> SHOP (timeMinutes=10, stamina=-5, satiety=-3, dir=E)
-link SHOP -> SCHOOL (timeMinutes=10, stamina=-5, satiety=-3, dir=W)
+link SCHOOL -> SHOP (timeMinutes=10, stamina=-3, satiety=-2, dir=E)
+link SHOP -> SCHOOL (timeMinutes=10, stamina=-3, satiety=-2, dir=W)
 
-link SCHOOL -> CAFE (timeMinutes=10, stamina=-5, satiety=-3, dir=W)
-link CAFE -> SCHOOL (timeMinutes=10, stamina=-5, satiety=-3, dir=E)
+link SCHOOL -> CAFE (timeMinutes=10, stamina=-3, satiety=-2, dir=W)
+link CAFE -> SCHOOL (timeMinutes=10, stamina=-3, satiety=-2, dir=E)
 `.trim();
 
 export const worldMapTerminalUi = `

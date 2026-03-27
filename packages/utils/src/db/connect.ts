@@ -1,5 +1,5 @@
-import process from "node:process";
 import mongoose from "mongoose";
+import { getYuijuConfig } from "../config";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -11,9 +11,9 @@ export const connectDB = async () => {
     return globalThis.__yuiju_mongo_connection;
   }
 
-  const uri = process.env.MONGO_URI;
+  const uri = getYuijuConfig().database.mongoUri.trim();
   if (!uri) {
-    throw new Error("MONGO_URI environment variable is not defined");
+    throw new Error("yuiju.config.ts 中的 database.mongoUri 未配置");
   }
 
   const connectionPromise = mongoose.connect(uri);

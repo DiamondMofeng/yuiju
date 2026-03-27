@@ -12,13 +12,12 @@ import type {
   BehaviorRecord,
   PlanState,
 } from "@yuiju/utils";
-import { memorySearchTool as unifiedMemorySearchTool } from "@yuiju/utils";
+import { strongModel, memorySearchTool as unifiedMemorySearchTool } from "@yuiju/utils";
 import { generateText, Output, stepCountIs } from "ai";
 import dayjs from "dayjs";
 import { z } from "zod";
 import { logger } from "@/utils/logger";
 import { queryAvailableFood } from "./tools";
-import { strong_model } from "./utils";
 
 const RETRY_COUNT = 3;
 
@@ -68,7 +67,7 @@ export async function chooseActionAgent(
   for (let i = 0; i < RETRY_COUNT; i++) {
     try {
       const { output, reasoningText } = await generateText({
-        model: strong_model,
+        model: strongModel,
         tools: {
           memorySearch: unifiedMemorySearchTool,
           queryAvailableFood: queryAvailableFood(context),
@@ -78,7 +77,7 @@ export async function chooseActionAgent(
             action: z
               .enum(actionList?.map((item) => item.action))
               .describe("Action ID，例如：发呆、起床等"),
-            reason: z.string().describe("说明为什么选择这个Action"),
+            reason: z.string().describe("选择这个 Action 的简短原因"),
             durationMinute: z
               .number()
               .optional()
@@ -136,7 +135,7 @@ export async function chooseFoodAgent(
   for (let i = 0; i < RETRY_COUNT; i++) {
     try {
       const { output } = await generateText({
-        model: strong_model,
+        model: strongModel,
         // providerOptions: {
         //   Siliconflow: {
         //     enable_thinking: true,
@@ -197,7 +196,7 @@ export async function chooseShopProductAgent(
   for (let i = 0; i < RETRY_COUNT; i++) {
     try {
       const { output } = await generateText({
-        model: strong_model,
+        model: strongModel,
         output: Output.object({
           schema: z.object({
             value: z.enum(productList.map((item) => item.value)).describe("选择的商品名称"),
@@ -251,7 +250,7 @@ export async function chooseCafeCoffeeAgent(
   for (let i = 0; i < RETRY_COUNT; i++) {
     try {
       const { output } = await generateText({
-        model: strong_model,
+        model: strongModel,
         output: Output.object({
           schema: z.object({
             value: z.enum(coffeeList.map((item) => item.value)).describe("选择的咖啡名称"),

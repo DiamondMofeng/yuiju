@@ -1,0 +1,33 @@
+import { defineYuijuConfig } from "./packages/utils/src/config/config-schema";
+
+const config = defineYuijuConfig({
+  app: {
+    publicDeployment: false,
+  },
+  database: {
+    mongoUri: "mongodb://localhost:27017/yuiju?authSource=admin",
+    redisUrl: "redis://localhost:6379",
+  },
+  llm: {
+    deepseekApiKey: "xxx",
+    siliconflowApiKey: "xxx",
+    moonshotApiKey: "xxx",
+  },
+  message: {
+    napcat: {
+      protocol: "ws",
+      host: "localhost",
+      port: 3001,
+      accessToken: "xxx",
+      reconnection: {
+        enable: true,
+        attempts: 10,
+        delay: 5000,
+      },
+    },
+    whiteList: [1918418506],
+    groupWhiteList: [838986741, 1083608109],
+  },
+});
+
+export default config;

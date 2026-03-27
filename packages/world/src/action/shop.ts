@@ -9,6 +9,7 @@ import {
 import { chooseShopProductAgent } from "@/llm/agent";
 import { planManager } from "@/plan";
 import { logger } from "@/utils/logger";
+import { buildFoodMetadata } from "../utils/food-utils";
 
 const SHOP_MIN_PRICE = Math.min(...SHOP_PRODUCTS.map((p) => p.price));
 
@@ -97,7 +98,12 @@ export const shopAction: ActionMetadata[] = [
           name: product.name,
           description: product.description,
           category: "food",
-          metadata: { stamina: product.stamina, satiety: Math.round(product.price / 5) },
+          metadata: buildFoodMetadata({
+            stamina: product.stamina,
+            satiety: product.satiety,
+            mood: product.mood,
+            fallbackSatiety: Math.round(product.price / 5),
+          }),
         },
         quantity,
       );
@@ -112,29 +118,29 @@ export const shopAction: ActionMetadata[] = [
   },
   {
     action: ActionId.Go_Home_From_Shop,
-    description: "从商店回家。[体力-8][饱腹-5][耗时20分钟]",
+    description: "从商店回家。[体力-5][饱腹-3][耗时20分钟]",
     precondition(context) {
       return isAtShop(context.characterState.location.major);
     },
     async executor(context) {
       await context.characterState.setAction(ActionId.Go_Home_From_Shop);
       await context.characterState.setLocation({ major: MajorScene.Home });
-      await context.characterState.changeStamina(-8);
-      await context.characterState.changeSatiety(-5);
+      await context.characterState.changeStamina(-5);
+      await context.characterState.changeSatiety(-3);
     },
     durationMin: 20,
   },
   {
     action: ActionId.Go_To_School_From_Shop,
-    description: "从商店前往学校。[体力-5][饱腹-3][耗时10分钟]",
+    description: "从商店前往学校。[体力-3][饱腹-2][耗时10分钟]",
     precondition(context) {
       return isAtShop(context.characterState.location.major);
     },
     async executor(context) {
       await context.characterState.setAction(ActionId.Go_To_School_From_Shop);
       await context.characterState.setLocation({ major: MajorScene.School });
-      await context.characterState.changeStamina(-5);
-      await context.characterState.changeSatiety(-3);
+      await context.characterState.changeStamina(-3);
+      await context.characterState.changeSatiety(-2);
     },
     durationMin: 10,
   },

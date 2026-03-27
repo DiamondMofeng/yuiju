@@ -1,4 +1,4 @@
-// import process from "node:process";
+import process from "node:process";
 import { setTimeout } from "node:timers/promises";
 import dayjs from "dayjs";
 import { characterState } from "@/state/character-state";
@@ -8,14 +8,14 @@ import { tick } from "./tick";
 let running = false;
 let stopped = false;
 
-// process.on("SIGINT", () => {
-//   stopped = true;
-//   process.exit();
-// });
-// process.on("SIGTERM", () => {
-//   stopped = true;
-//   process.exit();
-// });
+process.on("SIGINT", () => {
+  stopped = true;
+  process.exit();
+});
+process.on("SIGTERM", () => {
+  stopped = true;
+  process.exit();
+});
 
 /**
  * 等待运行中的 action 结束。

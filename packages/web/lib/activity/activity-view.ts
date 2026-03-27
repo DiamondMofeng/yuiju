@@ -19,7 +19,6 @@ export interface ActivityItem {
   durationMinutes: number;
   episodeType: IMemoryEpisode["type"];
   source: IMemoryEpisode["source"];
-  importance: number;
   extractionStatus: IMemoryEpisode["extractionStatus"];
   detailFields: ActivityDetailField[];
   payloadPreview: string;
@@ -48,7 +47,6 @@ export function mapEpisodeToActivityItem(episode: IMemoryEpisode): ActivityItem 
     durationMinutes: Number(episode.payload.durationMinutes ?? 0),
     episodeType: episode.type,
     source: episode.source,
-    importance: episode.importance,
     extractionStatus: episode.extractionStatus,
     detailFields,
     payloadPreview: JSON.stringify(
@@ -56,11 +54,10 @@ export function mapEpisodeToActivityItem(episode: IMemoryEpisode): ActivityItem 
         id: episode.id,
         source: episode.source,
         type: episode.type,
-        subjectId: episode.subjectId,
-        counterpartyId: episode.counterpartyId,
+        subject: episode.subject,
+        counterparty: episode.counterparty,
         happenedAt: episode.happenedAt.toISOString(),
         summaryText: episode.summaryText,
-        importance: episode.importance,
         extractionStatus: episode.extractionStatus,
         extractedFactIds: episode.extractedFactIds,
         payload: episode.payload,
@@ -78,7 +75,7 @@ function resolveActivityTitle(episode: IMemoryEpisode): string {
     return String(payload.action ?? "行为");
   }
   if (episode.type === "conversation") {
-    return `对话归档 · ${String(episode.counterpartyId ?? "未命名对象")}`;
+    return `对话归档 · ${String(episode.counterparty ?? "未命名对象")}`;
   }
   if (episode.type.startsWith("plan_")) {
     const after = getNestedObject(payload.after);
@@ -110,11 +107,10 @@ function buildDetailFields(episode: IMemoryEpisode): ActivityDetailField[] {
     { label: "来源", value: episode.source },
     { label: "发生时间", value: dayjs(episode.happenedAt).format("YYYY-MM-DD HH:mm:ss") },
     { label: "记忆状态", value: episode.extractionStatus },
-    { label: "重要度", value: episode.importance.toFixed(2) },
   ];
 
-  if (episode.counterpartyId) {
-    fields.push({ label: "关联对象", value: episode.counterpartyId });
+  if (episode.counterparty) {
+    fields.push({ label: "关联对象", value: episode.counterparty });
   }
 
   if (episode.type === "behavior") {
@@ -138,12 +134,26 @@ function buildDetailFields(episode: IMemoryEpisode): ActivityDetailField[] {
   if (episode.type.startsWith("plan_")) {
     const before = getNestedObject(payload.before);
     const after = getNestedObject(payload.after);
+    const changeType = String(payload.changeType ?? "未知");
+
     fields.push(
       { label: "计划范围", value: String(payload.planScope ?? "未知") },
-      { label: "变更类型", value: String(payload.changeType ?? "未知") },
-      { label: "原计划", value: String(before.title ?? "无") },
-      { label: "新计划", value: String(after.title ?? "无") },
+      { label: "变更类型", value: changeType },
     );
+
+    if (changeType === "created") {
+      fields.push({ label: "新计划", value: String(after.title ?? "无") });
+    } else if (changeType === "updated") {
+      fields.push(
+        { label: "原计划", value: String(before.title ?? "无") },
+        { label: "新计划", value: String(after.title ?? "无") },
+      );
+    } else {
+      fields.push(
+        { label: "计划", value: String(before.title ?? after.title ?? "无") },
+        { label: "结果状态", value: String(after.status ?? "无") },
+      );
+    }
   }
 
   if (episode.type === "system") {

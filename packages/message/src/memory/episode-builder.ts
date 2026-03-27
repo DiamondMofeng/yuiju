@@ -1,7 +1,6 @@
 import type { MemoryEpisode } from "@yuiju/utils";
 import { DEFAULT_MEMORY_SUBJECT_ID, getTimeWithWeekday } from "@yuiju/utils";
 import dayjs from "dayjs";
-const DEFAULT_IMPORTANCE = 0.5;
 
 export interface ChatWindowMessageItem {
   speaker_name: string;
@@ -47,8 +46,8 @@ export function buildConversationEpisode(input: {
   return {
     source: "chat",
     type: "conversation",
-    subjectId: DEFAULT_MEMORY_SUBJECT_ID,
-    counterpartyId: input.counterpartyName,
+    subject: DEFAULT_MEMORY_SUBJECT_ID,
+    counterparty: input.counterpartyName,
     happenedAt: windowEnd,
     summaryText: [
       `悠酱与 ${input.counterpartyName} 完成了一段对话窗口归档`,
@@ -58,7 +57,6 @@ export function buildConversationEpisode(input: {
     ]
       .filter(Boolean)
       .join("；"),
-    importance: DEFAULT_IMPORTANCE,
     extractionStatus: "pending",
     isDev: input.isDev,
     payload: {

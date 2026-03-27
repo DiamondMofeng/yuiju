@@ -15,7 +15,6 @@
   "license": "AGPL-3.0-or-later",
   "packageManager": "pnpm@10.14.0",
   "dependencies": {
-    "node-napcat-ts": "^0.4.20",
     "@yuiju/source": "workspace:*",
     "@yuiju/utils": "workspace:*"
   }

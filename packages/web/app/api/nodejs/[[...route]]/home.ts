@@ -1,4 +1,4 @@
-import { initCharacterStateData, initWorldStateData } from "@yuiju/utils";
+import { initCharacterStateData, initPlanStateData, initWorldStateData } from "@yuiju/utils";
 import { Hono } from "hono";
 
 export const homeRoute = new Hono();
@@ -24,7 +24,12 @@ export interface HomeResponse {
 }
 
 homeRoute.get("/summary", async (context) => {
-  const [state, world] = await Promise.all([initCharacterStateData(), initWorldStateData()]);
+  // 核心逻辑：角色状态、计划状态、世界时间分别来自不同真相源，首页聚合时统一读取。
+  const [state, planState, world] = await Promise.all([
+    initCharacterStateData(),
+    initPlanStateData(),
+    initWorldStateData(),
+  ]);
 
   const inventory =
     state.inventory?.map((item) => ({
@@ -46,8 +51,8 @@ homeRoute.get("/summary", async (context) => {
       todayActions: state.dailyActionsDoneToday,
       inventory,
       plans: {
-        longTerm: state.longTermPlan,
-        shortTerm: state.shortTermPlan,
+        longTerm: planState.mainPlan?.title,
+        shortTerm: planState.activePlans.map((plan) => plan.title),
       },
       world: {
         time: world.time.format("YYYY-MM-DD HH:mm"),

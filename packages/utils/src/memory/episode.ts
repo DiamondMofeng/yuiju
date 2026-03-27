@@ -51,11 +51,10 @@ export interface MemoryEpisode<TPayload = object> {
   id?: string;
   source: MemoryEpisodeSource;
   type: MemoryEpisodeType;
-  subjectId: string;
-  counterpartyId?: string;
+  subject: string;
+  counterparty?: string;
   happenedAt: Date;
   summaryText: string;
-  importance: number;
   payload: TPayload;
   extractionStatus: MemoryEpisodeExtractionStatus;
   extractedFactIds?: string[];

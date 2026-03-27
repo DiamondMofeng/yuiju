@@ -1,5 +1,4 @@
 import {
-  type MemoryQueryTimeRange,
   type MemoryQueryTimeSort,
   type MemoryQueryType,
   type MemorySearchResult,
@@ -14,7 +13,6 @@ import {
  * - 这里仅保留兼容出口，避免一次性打碎现有 import。
  */
 export type MemorySearchMode = MemoryQueryType;
-export type MemorySearchTimeRange = MemoryQueryTimeRange;
 export type StructuredMemorySearchItem = MemorySearchResult;
 
 /**
@@ -23,7 +21,6 @@ export type StructuredMemorySearchItem = MemorySearchResult;
 export async function searchStructuredMemory(input: {
   query: string;
   mode: MemorySearchMode;
-  timeRange?: MemorySearchTimeRange;
   startTime?: string;
   endTime?: string;
   timeSort?: MemoryQueryTimeSort;
@@ -33,7 +30,6 @@ export async function searchStructuredMemory(input: {
   return await memoryQueryRouter.search({
     query: input.query,
     memoryType: input.mode,
-    timeRange: input.timeRange,
     startTime: input.startTime,
     endTime: input.endTime,
     timeSort: input.timeSort,

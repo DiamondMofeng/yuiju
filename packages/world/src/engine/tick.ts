@@ -74,7 +74,7 @@ export async function tick(params: TickParams): Promise<TickReturn> {
   const recentBehaviors = await getRecentMemoryEpisodes({
     limit: 10,
     types: ["behavior"],
-    subjectId: DEFAULT_MEMORY_SUBJECT_ID,
+    subject: DEFAULT_MEMORY_SUBJECT_ID,
     isDev: isDev(),
     onlyDate: new Date(),
   });

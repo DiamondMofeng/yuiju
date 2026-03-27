@@ -1,5 +1,6 @@
 import dayjs from "dayjs";
 import Redis from "ioredis";
+import { getYuijuConfig } from "./config";
 import { isDev } from "./env";
 import {
   ActionId,
@@ -23,7 +24,8 @@ export const REDIS_KEY_PLAN_STATE = isDev() ? "dev:yuiju:plan:state" : "yuiju:pl
 
 export const getRedis = () => {
   if (!redis) {
-    redis = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
+    const redisUrl = getYuijuConfig().database.redisUrl.trim();
+    redis = new Redis(redisUrl || "redis://localhost:6379");
   }
   return redis;
 };

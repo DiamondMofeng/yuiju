@@ -1,7 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, isTextUIPart, type UIMessage } from "ai";
+import { DefaultChatTransport, isTextUIPart, type TextUIPart, type UIMessage } from "ai";
 import dayjs from "dayjs";
 import { MessageSquare } from "lucide-react";
 import type { KeyboardEvent } from "react";
@@ -21,6 +21,13 @@ type MessageMetadata = {
 };
 
 type HomeUIMessage = UIMessage<MessageMetadata>;
+type PersistedTextPart = Pick<TextUIPart, "type" | "text">;
+type PersistedHomeMessage = {
+  id: string;
+  role: "user" | "assistant";
+  metadata?: MessageMetadata;
+  parts: PersistedTextPart[];
+};
 
 const USER_NAME_KEY = "yuiju:user_name";
 const DEFAULT_USER_NAME = "渺小久";
@@ -37,54 +44,75 @@ const formatTime = (value: number | Date = new Date()) => {
   return dayjs(value).format("HH:mm");
 };
 
+// 关键函数：统一生成文本 part，避免对象字面量被推宽成泛型 string。
+const createTextPart = (text: string): TextUIPart => ({
+  type: "text",
+  text,
+});
+
+// 关键函数：从 UIMessage 中提取可持久化的纯文本片段，过滤掉 tool/data 等运行态内容。
+const getPersistedTextParts = (message: HomeUIMessage): PersistedTextPart[] => {
+  return message.parts.filter(isTextUIPart).map((part) => createTextPart(part.text));
+};
+
+// 关键函数：把本地存储结构恢复成 AI SDK 当前版本可识别的 UIMessage。
+const createHomeMessage = (input: PersistedHomeMessage): HomeUIMessage => {
+  return {
+    id: input.id,
+    role: input.role,
+    metadata: input.metadata,
+    parts: input.parts.map((part) => createTextPart(part.text)),
+  };
+};
+
+const isPersistedHomeMessage = (value: unknown): value is PersistedHomeMessage => {
+  if (!value || typeof value !== "object") return false;
+
+  const candidate = value as Partial<PersistedHomeMessage>;
+  if (typeof candidate.id !== "string") return false;
+  if (candidate.role !== "user" && candidate.role !== "assistant") return false;
+  if (!Array.isArray(candidate.parts)) return false;
+
+  return candidate.parts.every((part) => part?.type === "text" && typeof part.text === "string");
+};
+
+const isPersistableMessage = (
+  message: HomeUIMessage,
+): message is HomeUIMessage & { role: "user" | "assistant" } => {
+  return message.role === "user" || message.role === "assistant";
+};
+
 // 核心逻辑：解析本地缓存消息，仅保留安全的文本结构。
 const parseHistory = (raw: string | null): HomeUIMessage[] => {
   if (!raw) return [];
   try {
-    const parsed = JSON.parse(raw) as HomeUIMessage[];
+    const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map((item) => {
-        if (!item || typeof item !== "object") return null;
-        if (typeof item.id !== "string") return null;
-        if (item.role !== "user" && item.role !== "assistant") return null;
-        if (!Array.isArray(item.parts)) return null;
 
-        const parts = item.parts
-          .filter(isTextUIPart)
-          .map((part) => ({ type: "text", text: part.text }));
-
-        if (parts.length === 0) return null;
-
-        const metadata =
-          item.metadata && typeof item.metadata === "object" && "createdAt" in item.metadata
-            ? {
-                createdAt:
-                  typeof item.metadata.createdAt === "number" ? item.metadata.createdAt : undefined,
-              }
-            : undefined;
-
-        return {
-          id: item.id,
-          role: item.role,
-          metadata,
-          parts,
-        } as HomeUIMessage;
-      })
-      .filter((item): item is HomeUIMessage => Boolean(item));
+    return parsed.filter(isPersistedHomeMessage).map((item) =>
+      createHomeMessage({
+        id: item.id,
+        role: item.role,
+        metadata:
+          typeof item.metadata?.createdAt === "number"
+            ? { createdAt: item.metadata.createdAt }
+            : undefined,
+        parts: item.parts,
+      }),
+    );
   } catch {
     return [];
   }
 };
 
-const serializeMessages = (items: HomeUIMessage[]) => {
+const serializeMessages = (items: HomeUIMessage[]): PersistedHomeMessage[] => {
   return items
-    .filter((item) => item && (item.role === "user" || item.role === "assistant"))
+    .filter(isPersistableMessage)
     .map((item) => ({
       id: item.id,
       role: item.role,
       metadata: item.metadata?.createdAt ? { createdAt: item.metadata.createdAt } : undefined,
-      parts: item.parts.filter(isTextUIPart).map((part) => ({ type: "text", text: part.text })),
+      parts: getPersistedTextParts(item),
     }))
     .filter((item) => item.parts.length > 0);
 };
@@ -152,7 +180,10 @@ export function HomePageHeader({ summary }: HomePageHeaderProps) {
         }
       }
 
-      return { didTrim, next: finalMessages };
+      return {
+        didTrim,
+        next: finalMessages.map((message) => createHomeMessage(message)),
+      };
     },
     [userName],
   );
@@ -171,12 +202,12 @@ export function HomePageHeader({ summary }: HomePageHeaderProps) {
     lastErrorRef.current = error.message;
     setMessages((prev) => [
       ...prev,
-      {
+      createHomeMessage({
         id: `error-${Date.now()}`,
         role: "assistant",
         metadata: { createdAt: Date.now() },
-        parts: [{ type: "text", text: `出错了：${error.message}` }],
-      },
+        parts: [createTextPart(`出错了：${error.message}`)],
+      }),
     ]);
   }, [error, setMessages]);
 

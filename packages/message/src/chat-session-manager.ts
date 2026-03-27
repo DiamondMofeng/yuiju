@@ -40,14 +40,12 @@ export class ChatSessionManager {
   private conversationLimit: number;
   private conversationTtlMs: number;
   private windowMs: number;
-  private memoryClient: MemoryServiceClient | null;
   private isDev: boolean;
 
   constructor(options: ChatSessionManagerOptions = {}) {
     this.conversationLimit = options.conversationLimit ?? 20;
     this.conversationTtlMs = options.conversationTtlMs ?? 3600 * 1000;
     this.windowMs = options.windowMs ?? 20 * 60 * 1000;
-    this.memoryClient = options.memoryClient ?? null;
     this.isDev = isDev();
   }
 
@@ -168,28 +166,6 @@ export class ChatSessionManager {
       processPendingMemoryEpisodes({ limit: 1, isDev: this.isDev }).catch((error) => {
         console.error("Failed to process pending memory episodes:", error);
       });
-
-      // 当前阶段只完成统一 Episode 建模，等待 Python 服务升级后再恢复真实写入。
-      // if (!this.memoryClient) {
-      //   console.error("No memory client provided");
-      //   return;
-      // }
-      //
-      // const payload: WriteEpisodeInput = {
-      //   type: "对话",
-      //   counterparty_name,
-      //   content: {
-      //     subject_name: SUBJECT_NAME,
-      //     counterparty_name,
-      //     window_start: episode.payload.windowStart,
-      //     window_end: episode.payload.windowEnd,
-      //     messages: state.messages,
-      //   },
-      //   reference_time: episode.happenedAt,
-      //   is_dev: this.isDev,
-      // };
-      //
-      // await this.memoryClient.writeEpisode(payload);
     } catch (error) {
       console.error("Failed to write chat window episode:", error);
       return;
