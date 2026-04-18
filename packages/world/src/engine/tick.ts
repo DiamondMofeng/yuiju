@@ -42,15 +42,6 @@ export interface TickReturn {
   runningAction?: Omit<RunningActionState, "waitUntil">;
 }
 
-function isValidPlanProposal(decision: ActionAgentDecision): boolean {
-  const proposal = decision.planProposal;
-  if (!proposal) {
-    return false;
-  }
-
-  return Boolean(proposal.longTermPlanTitle || proposal.shortTermPlanTitles?.length);
-}
-
 export async function tick(params: TickParams): Promise<TickReturn> {
   const context: ActionContext = {
     characterState: characterState,
@@ -94,26 +85,34 @@ export async function tick(params: TickParams): Promise<TickReturn> {
   if (actionMetadata && selectedAction) {
     const actionStartedAt = new Date();
     let planChanges: PlanChange[] = [];
+    const planProposal = selectedAction.planProposal;
 
-    if (selectedAction.planProposal && isValidPlanProposal(selectedAction)) {
-      const planApplyResult = await planManager.applyProposal(selectedAction.planProposal);
-      planChanges = planApplyResult.changes;
-    } else if (selectedAction.planProposal) {
-      logger.warn("[tick] ignore empty planProposal from chooseActionAgent", selectedAction);
+    if (planProposal) {
+      const hasPlanTitles = Boolean(
+        planProposal.longTermPlanTitle || planProposal.shortTermPlanTitles?.length,
+      );
+
+      if (!hasPlanTitles) {
+        logger.warn("[tick] ignore empty planProposal from chooseActionAgent", selectedAction);
+      } else {
+        planChanges = (await planManager.applyProposal(planProposal)).changes;
+      }
     }
 
-    const planEpisodes = buildPlanUpdateEpisodes({
-      changes: planChanges,
-      happenedAt: new Date(),
-      isDev: isDev(),
-    });
+    if (planChanges.length > 0) {
+      const planEpisodes = buildPlanUpdateEpisodes({
+        changes: planChanges,
+        happenedAt: new Date(),
+        isDev: isDev(),
+      });
 
-    for (const planEpisode of planEpisodes) {
-      try {
-        await emitMemoryEpisode(planEpisode);
-        logger.info("[tick] built plan_update episode", planEpisode);
-      } catch (error) {
-        logger.error("[tick] write plan_update episode failed", error);
+      for (const planEpisode of planEpisodes) {
+        try {
+          await emitMemoryEpisode(planEpisode);
+          logger.info("[tick] built plan_update episode", planEpisode);
+        } catch (error) {
+          logger.error("[tick] write plan_update episode failed", error);
+        }
       }
     }
 

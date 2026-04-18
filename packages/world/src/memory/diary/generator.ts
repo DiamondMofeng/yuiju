@@ -1,7 +1,6 @@
 import {
   buildDiarySystemPrompt,
   DEFAULT_DIARY_SUBJECT,
-  deepseekProvider,
   getRecentMemoryEpisodes,
   type IMemoryEpisode,
   minimaxModel,
@@ -72,7 +71,7 @@ function buildRawConversationMaterial(episode: IMemoryEpisode): DiaryMaterialIte
     type: "conversation",
     happenedAt: dayjs(episode.happenedAt).toISOString(),
     content: [
-      `对话对象：${payload.counterpartyName ?? episode.counterparty ?? "未知对象"}`,
+      `对话对象：${payload.counterpartyName ?? "未知对象"}`,
       `窗口摘要：${episode.summaryText}`,
       messages ? `消息记录：\n${messages}` : undefined,
     ]

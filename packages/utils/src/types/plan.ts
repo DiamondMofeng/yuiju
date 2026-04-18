@@ -78,6 +78,5 @@ export interface PlanChange {
  * Plan Manager 应用 proposal 后的返回结果。
  */
 export interface PlanApplyResult {
-  state: PlanState;
   changes: PlanChange[];
 }

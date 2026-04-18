@@ -297,7 +297,6 @@ export function ActivityTimelineCard({
 
                   <div className="flex items-center justify-between gap-3 text-[12px] text-[#6b7480]">
                     <span>{item.dateLabel}</span>
-                    <span>{item.extractionStatus}</span>
                   </div>
                 </button>
               );

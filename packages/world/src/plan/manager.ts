@@ -64,13 +64,6 @@ function hasMeaningfulPlanChanges(input: { previous?: PlanItem; next: PlanItem }
   );
 }
 
-function createApplyResult(state: PlanState, changes: PlanChange[]): PlanApplyResult {
-  return {
-    state,
-    changes,
-  };
-}
-
 /**
  * 计划状态管理器。
  *
@@ -113,7 +106,7 @@ export class PlanManager {
     const hasShortTermUpdate = Object.hasOwn(proposal, "shortTermPlanTitles");
 
     if (!hasLongTermUpdate && !hasShortTermUpdate) {
-      return createApplyResult(currentState, changes);
+      return { changes };
     }
 
     if (hasLongTermUpdate) {
@@ -137,12 +130,12 @@ export class PlanManager {
     }
 
     if (changes.length === 0) {
-      return createApplyResult(currentState, changes);
+      return { changes };
     }
 
     currentState.updatedAt = nowIso;
     await savePlanStateData(currentState);
-    return createApplyResult(currentState, changes);
+    return { changes };
   }
 
   private applyLongTermProposal(input: {
@@ -329,7 +322,7 @@ export class PlanManager {
     } else {
       const planIndex = currentState.shortTermPlans.findIndex((plan) => plan.id === planId);
       if (planIndex < 0) {
-        return createApplyResult(currentState, changes);
+        return { changes };
       }
 
       const [removedPlan] = currentState.shortTermPlans.splice(planIndex, 1);
@@ -343,7 +336,7 @@ export class PlanManager {
 
     currentState.updatedAt = nowIso;
     await savePlanStateData(currentState);
-    return createApplyResult(currentState, changes);
+    return { changes };
   }
 }
 

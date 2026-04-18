@@ -49,7 +49,6 @@ export function buildConversationEpisode(input: {
     source: "chat",
     type: "conversation",
     subject: SUBJECT_NAME,
-    counterparty: input.sessionLabel,
     happenedAt: windowEnd,
     summaryText: [
       `${input.sessionLabel} 完成了一段对话窗口归档`,
@@ -58,7 +57,6 @@ export function buildConversationEpisode(input: {
     ]
       .filter(Boolean)
       .join("；"),
-    extractionStatus: "skipped",
     isDev: input.isDev,
     payload: {
       counterpartyName: input.sessionLabel,

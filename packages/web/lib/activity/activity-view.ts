@@ -19,7 +19,6 @@ export interface ActivityItem {
   durationMinutes: number;
   episodeType: IMemoryEpisode["type"];
   source: IMemoryEpisode["source"];
-  extractionStatus: IMemoryEpisode["extractionStatus"];
   detailFields: ActivityDetailField[];
   payloadPreview: string;
 }
@@ -47,7 +46,6 @@ export function mapEpisodeToActivityItem(episode: IMemoryEpisode): ActivityItem 
     durationMinutes: Number(episode.payload.durationMinutes ?? 0),
     episodeType: episode.type,
     source: episode.source,
-    extractionStatus: episode.extractionStatus,
     detailFields,
     payloadPreview: JSON.stringify(
       {
@@ -55,11 +53,8 @@ export function mapEpisodeToActivityItem(episode: IMemoryEpisode): ActivityItem 
         source: episode.source,
         type: episode.type,
         subject: episode.subject,
-        counterparty: episode.counterparty,
         happenedAt: episode.happenedAt.toISOString(),
         summaryText: episode.summaryText,
-        extractionStatus: episode.extractionStatus,
-        extractedFactIds: episode.extractedFactIds,
         payload: episode.payload,
       },
       null,
@@ -75,7 +70,7 @@ function resolveActivityTitle(episode: IMemoryEpisode): string {
     return String(payload.action ?? "行为");
   }
   if (episode.type === "conversation") {
-    return `对话归档 · ${String(episode.counterparty ?? "未命名对象")}`;
+    return `对话归档 · ${String(payload.counterpartyName ?? "未命名对象")}`;
   }
   if (episode.type.startsWith("plan_")) {
     const after = getNestedObject(payload.after);
@@ -106,11 +101,10 @@ function buildDetailFields(episode: IMemoryEpisode): ActivityDetailField[] {
     { label: "事件类型", value: episode.type },
     { label: "来源", value: episode.source },
     { label: "发生时间", value: dayjs(episode.happenedAt).format("YYYY-MM-DD HH:mm:ss") },
-    { label: "记忆状态", value: episode.extractionStatus },
   ];
 
-  if (episode.counterparty) {
-    fields.push({ label: "关联对象", value: episode.counterparty });
+  if (episode.type === "conversation" && typeof payload.counterpartyName === "string") {
+    fields.push({ label: "关联对象", value: payload.counterpartyName });
   }
 
   if (episode.type === "behavior") {

@@ -139,7 +139,6 @@ stateRoute.post("/allowance", async (context) => {
       subject: SUBJECT_NAME,
       happenedAt: new Date(),
       summaryText: reason ? `${descriptionBase}；原因：${reason}` : descriptionBase,
-      extractionStatus: "skipped",
       isDev: isDev(),
       payload: {
         eventName: "金币变动",

@@ -87,7 +87,6 @@ export function buildBehaviorEpisode(
     subject: SUBJECT_NAME,
     happenedAt: input.happenedAt,
     summaryText,
-    extractionStatus: "skipped",
     isDev: input.isDev,
     payload: {
       action: input.selectedAction.action,
@@ -125,7 +124,7 @@ export function buildPlanUpdateEpisodes(
  *
  * 说明：
  * - 仅在天气类型或体感温度等级发生变化时写入；
- * - extractionStatus 直接标记为 skipped，避免进入长期事实抽取链路。
+ * - 只负责生成事件真相源，不再附带额外处理状态。
  */
 export function buildWeatherChangedEpisode(input: {
   before: WeatherSnapshot | null;
@@ -153,7 +152,6 @@ export function buildWeatherChangedEpisode(input: {
       `天气：${input.before.type} -> ${input.after.type}`,
       `体感：${input.before.temperatureLevel} -> ${input.after.temperatureLevel}`,
     ].join("；"),
-    extractionStatus: "skipped",
     isDev: input.isDev,
     payload: {
       before: input.before,
@@ -183,7 +181,6 @@ function createPlanLifecycleEpisode(input: {
     subject: SUBJECT_NAME,
     happenedAt: input.happenedAt,
     summaryText: buildPlanLifecycleSummaryText(change, scopeText, actionText),
-    extractionStatus: "skipped",
     isDev: input.isDev,
     payload: {
       planId: change.planId,

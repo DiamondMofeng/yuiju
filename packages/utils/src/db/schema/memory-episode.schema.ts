@@ -1,7 +1,6 @@
 import dayjs from "dayjs";
 import mongoose, { type Document, Schema } from "mongoose";
 import type {
-  MemoryEpisodeExtractionStatus,
   MemoryEpisodeSource,
   MemoryEpisodeType,
   MemoryEpisodeWriteInput,
@@ -20,12 +19,9 @@ export interface IMemoryEpisode extends Document {
   source: MemoryEpisodeSource;
   type: MemoryEpisodeType;
   subject: string;
-  counterparty?: string;
   happenedAt: Date;
   summaryText: string;
   payload: Record<string, unknown>;
-  extractionStatus: MemoryEpisodeExtractionStatus;
-  extractedFactIds?: string[];
   isDev: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -56,22 +52,9 @@ const MemoryEpisodeSchema = new Schema<IMemoryEpisode>(
       index: true,
     },
     subject: { type: String, required: true, index: true },
-    counterparty: { type: String, required: false, index: true },
     happenedAt: { type: Date, required: true, index: true },
     summaryText: { type: String, required: true },
     payload: { type: Schema.Types.Mixed, required: true },
-    extractionStatus: {
-      type: String,
-      enum: ["pending", "processing", "done", "skipped", "failed"],
-      required: true,
-      default: "pending",
-      index: true,
-    },
-    extractedFactIds: {
-      type: [String],
-      required: false,
-      default: undefined,
-    },
     isDev: { type: Boolean, required: true, default: false, index: true },
   },
   {
@@ -93,19 +76,12 @@ export interface GetRecentMemoryEpisodesOptions {
   skip?: number;
   types?: MemoryEpisodeType[];
   subject?: string;
-  counterparty?: string;
   isDev?: boolean;
   onlyDate?: Date;
   happenedAfter?: Date;
   happenedBefore?: Date;
   sortDirection?: "asc" | "desc";
   sortField?: "happenedAt" | "createdAt";
-}
-
-export interface GetPendingMemoryEpisodesOptions {
-  limit?: number;
-  statuses?: MemoryEpisodeExtractionStatus[];
-  isDev?: boolean;
 }
 
 /**
@@ -119,50 +95,6 @@ export async function saveMemoryEpisode(input: MemoryEpisodeWriteInput): Promise
     isDev: input.isDev ?? false,
   });
   return await episode.save();
-}
-
-/**
- * 更新 Episode 的抽取状态与已写入事实列表。
- */
-export async function updateMemoryEpisodeExtraction(
-  episodeId: string,
-  input: {
-    extractionStatus: MemoryEpisodeExtractionStatus;
-    extractedFactIds?: string[];
-  },
-): Promise<void> {
-  await connectDB();
-  await MemoryEpisodeModel.findByIdAndUpdate(episodeId, {
-    extractionStatus: input.extractionStatus,
-    extractedFactIds: input.extractedFactIds,
-  }).exec();
-}
-
-/**
- * 批量查询待处理 Episode。
- *
- * 说明：
- * - 默认只扫描 pending / failed 两类状态，便于异步补偿；
- * - 返回顺序按发生时间正序，优先处理更早堆积的数据。
- */
-export async function getPendingMemoryEpisodes(
-  options: GetPendingMemoryEpisodesOptions = {},
-): Promise<IMemoryEpisode[]> {
-  await connectDB();
-
-  const filter: Record<string, unknown> = {
-    extractionStatus: {
-      $in: options.statuses ?? ["pending", "failed"],
-    },
-  };
-  if (typeof options.isDev === "boolean") {
-    filter.isDev = options.isDev;
-  }
-
-  return await MemoryEpisodeModel.find(filter)
-    .sort({ happenedAt: 1, createdAt: 1 })
-    .limit(options.limit ?? 20)
-    .exec();
 }
 
 /**
@@ -210,9 +142,6 @@ function buildRecentMemoryEpisodesFilter(
   }
   if (options.subject) {
     filter.subject = options.subject;
-  }
-  if (options.counterparty) {
-    filter.counterparty = options.counterparty;
   }
   if (typeof options.isDev === "boolean") {
     filter.isDev = options.isDev;

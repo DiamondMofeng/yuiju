@@ -37,25 +37,12 @@ export type MemoryEpisodeType =
   | "system";
 
 /**
- * 事实抽取状态。
- *
- * 说明：
- * - 历史命名沿用 extractionStatus，当前主要用于兼容既有存储结构与界面展示；
- * - 长期记忆后处理链已移除，新写入的数据统一使用 skipped；
- * - 其余状态仍保留在类型中，用于兼容历史记录读取。
- */
-export type MemoryEpisodeExtractionStatus =
-  | "pending"
-  | "processing"
-  | "done"
-  | "skipped"
-  | "failed";
-
-/**
  * 统一的 Episode 写入模型。
  *
  * 说明：
  * - 该模型当前只在 TS 侧作为领域真相源使用；
+ * - subject 表示“这是谁的人生记录”，即这条 episode 围绕的主语；
+ * - 当前项目虽然是单主角场景，subject 基本固定为主角标识，但仍保留该字段，让单条 episode 自身语义完整；
  * - payload 保留结构化原始信息，summaryText 则为后续检索/抽取提供稳定摘要；
  * - isDev 用于未来恢复到真实服务端写入时，映射 dev/prod 命名空间。
  */
@@ -64,18 +51,9 @@ export interface MemoryEpisode<TPayload = object> {
   source: MemoryEpisodeSource;
   type: MemoryEpisodeType;
   subject: string;
-  counterparty?: string;
   happenedAt: Date;
   summaryText: string;
   payload: TPayload;
-  extractionStatus: MemoryEpisodeExtractionStatus;
-  /**
-   * 历史字段名沿用 extractedFactIds。
-   *
-   * 当前阶段该字段保存写入 Graphiti 后返回的产物 ID，
-   * 便于本地界面或诊断脚本观察处理结果。
-   */
-  extractedFactIds?: string[];
   isDev?: boolean;
 }
 
