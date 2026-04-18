@@ -7,11 +7,12 @@ import { logger } from "@/utils/logger";
 
 type MessageSegment = Receive[keyof Receive];
 type AtMessageSegment = Extract<MessageSegment, { type: "at" }>;
+type FaceMessageSegment = Extract<MessageSegment, { type: "face" }>;
 type ImageMessageSegment = Extract<MessageSegment, { type: "image" }>;
 type ReplyMessageSegment = Extract<MessageSegment, { type: "reply" }>;
 type NonEnhancedMessageSegment = Exclude<
   MessageSegment,
-  AtMessageSegment | ReplyMessageSegment | ImageMessageSegment
+  AtMessageSegment | FaceMessageSegment | ReplyMessageSegment | ImageMessageSegment
 >;
 
 export type RawGroupMessage = Omit<AllHandlers["message.group"], "quick_action">;
@@ -49,8 +50,15 @@ export interface EnhancedImageSegment extends Omit<ImageMessageSegment, "data"> 
   };
 }
 
+export interface EnhancedFaceSegment extends Omit<FaceMessageSegment, "data"> {
+  data: {
+    faceText?: string;
+  };
+}
+
 export type EnhancedMessageSegment =
   | NonEnhancedMessageSegment
+  | EnhancedFaceSegment
   | EnhancedImageSegment
   | EnhancedAtSegment
   | EnhancedReplySegment;
@@ -212,6 +220,12 @@ export async function segmentsTransfer(
         case "image":
           return resolveImageSegment(segment);
         case "face":
+          return {
+            type: "face",
+            data: {
+              faceText: segment.data.raw.faceText,
+            },
+          };
         case "record":
         case "video":
         case "file":

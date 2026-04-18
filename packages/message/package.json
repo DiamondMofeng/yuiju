@@ -7,6 +7,7 @@
   "scripts": {
     "start": "NODE_ENV=production tsx -r tsconfig-paths/register src/server.ts",
     "dev": "NODE_ENV=development tsx -r tsconfig-paths/register src/server.ts",
+    "demo": "NODE_ENV=development tsx -r tsconfig-paths/register src/demo/index.ts",
     "type-check": "tsc --noEmit"
   },
   "keywords": [],
