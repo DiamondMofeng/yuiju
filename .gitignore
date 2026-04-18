@@ -151,4 +151,4 @@ packages/python/__pycache__/
 .devtools
 
 yuiju.config.ts
-memory/
+/memory/

@@ -57,14 +57,15 @@ export async function main() {
     console.log(JSON.stringify(result, null, 2));
 
     const memory = await getPersonMemory(updateInput.personId);
+    const filePath = await getPersonMemoryFilePath(updateInput.personId);
 
     if (!memory) {
-      console.log(`\n未读取到人物记忆文件：${getPersonMemoryFilePath(updateInput.personId)}`);
+      console.log(`\n未读取到人物记忆文件：${filePath}`);
       continue;
     }
 
     console.log("\n=== MEMORY FILE ===\n");
-    console.log(getPersonMemoryFilePath(updateInput.personId));
+    console.log(filePath);
     console.log("\n=== MEMORY CONTENT ===\n");
     console.log(JSON.stringify(memory.memory, null, 2));
   }
