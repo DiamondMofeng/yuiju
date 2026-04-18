@@ -1,4 +1,4 @@
-import type { PlanProposal } from "./plan";
+import type { AgentPlanChange } from "./plan";
 import type { ICharacterState, IWorldState } from "./state";
 
 export enum ActionId {
@@ -106,7 +106,7 @@ export interface ActionAgentDecision {
   action: ActionId;
   reason: string;
   durationMinute?: number;
-  planProposal?: PlanProposal;
+  planChanges?: AgentPlanChange[];
 }
 
 export abstract class ActionMetadata {

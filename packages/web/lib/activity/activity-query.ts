@@ -17,7 +17,6 @@ const ACTIVITY_TYPES = [
   "plan_updated",
   "plan_completed",
   "plan_abandoned",
-  "plan_superseded",
   "system",
 ] as const;
 

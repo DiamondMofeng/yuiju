@@ -43,21 +43,28 @@ export interface PlanState {
 }
 
 /**
- * LLM 在 tick 阶段给出的计划变更提议。
+ * 主决策 agent 输出的计划变更。
+ *
+ * 字段约束：
+ * - created: 仅填写 nextPlan
+ * - updated: 同时填写 currentPlan 与 nextPlan
+ * - abandoned: 仅填写 currentPlan
+ * - completed: 仅填写 currentPlan
  */
-export interface PlanProposal {
-  longTermPlanTitle?: string;
-  shortTermPlanTitles?: string[];
+export type AgentPlanChangeType = "created" | "updated" | "abandoned" | "completed";
+
+export interface AgentPlanChange {
+  scope: PlanScope;
+  changeType: AgentPlanChangeType;
+  currentPlan?: string;
+  nextPlan?: string;
   reason: string;
-  source?: PlanSource;
-  expiresAt?: string;
 }
 
 /**
- * 计划变更类型。
- * superseded 被取代
+ * 内部计划变更类型与 agent 输出保持一致，避免两套语义分叉。
  */
-export type PlanChangeType = "created" | "updated" | "completed" | "abandoned" | "superseded";
+export type PlanChangeType = AgentPlanChangeType;
 
 /**
  * 单次计划变更记录。

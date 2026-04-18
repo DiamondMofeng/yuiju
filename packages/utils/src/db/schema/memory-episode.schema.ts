@@ -44,7 +44,6 @@ const MemoryEpisodeSchema = new Schema<IMemoryEpisode>(
         "plan_updated",
         "plan_completed",
         "plan_abandoned",
-        "plan_superseded",
         "weather_changed",
         "system",
       ],

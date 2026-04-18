@@ -85,17 +85,16 @@ export async function tick(params: TickParams): Promise<TickReturn> {
   if (actionMetadata && selectedAction) {
     const actionStartedAt = new Date();
     let planChanges: PlanChange[] = [];
-    const planProposal = selectedAction.planProposal;
+    const agentPlanChanges = selectedAction.planChanges;
 
-    if (planProposal) {
-      const hasPlanTitles = Boolean(
-        planProposal.longTermPlanTitle || planProposal.shortTermPlanTitles?.length,
-      );
-
-      if (!hasPlanTitles) {
-        logger.warn("[tick] ignore empty planProposal from chooseActionAgent", selectedAction);
-      } else {
-        planChanges = (await planManager.applyProposal(planProposal)).changes;
+    if (agentPlanChanges?.length) {
+      try {
+        planChanges = (await planManager.applyPlanChanges(agentPlanChanges)).changes;
+      } catch (error) {
+        logger.warn("[tick] apply planChanges failed, ignore current planChanges", {
+          error,
+          planChanges: agentPlanChanges,
+        });
       }
     }
 

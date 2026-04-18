@@ -10,10 +10,11 @@ import {
   chooseActionPrompt,
   chooseCafeCoffeePrompt,
   chooseFoodPrompt,
-  diarySearchTool,
   chooseShopProductPrompt,
   chooseShrinePrayerPrompt,
+  diarySearchTool,
   queryWorldMapTool,
+  reviewPlanChangesTool,
   strongModel,
   todayEventSearchTool,
 } from "@yuiju/utils";
@@ -24,6 +25,14 @@ import { logger } from "@/utils/logger";
 import { queryAvailableFood } from "./tools";
 
 const RETRY_COUNT = 3;
+
+const agentPlanChangeSchema = z.object({
+  scope: z.enum(["longTerm", "shortTerm"]).describe("计划类型，长期计划还是短期计划"),
+  changeType: z.enum(["created", "updated", "abandoned", "completed"]).describe("计划变更类型。"),
+  currentPlan: z.string().optional().describe("原计划内容"),
+  nextPlan: z.string().optional().describe("新计划内容"),
+  reason: z.string().describe("这次变更的原因。"),
+});
 
 type ParameterAgentSelectedItem = {
   value: string;
@@ -69,13 +78,20 @@ export async function chooseActionAgent(
 
   for (let i = 0; i < RETRY_COUNT; i++) {
     try {
-      const { output, reasoningText } = await generateText({
+      const { output } = await generateText({
         model: strongModel,
         tools: {
           todayEventSearch: todayEventSearchTool,
           diarySearch: diarySearchTool,
           queryAvailableFood: queryAvailableFood(context),
           queryWorldMap: queryWorldMapTool,
+          reviewPlanChanges: reviewPlanChangesTool({
+            planState,
+            characterState: context.characterState.log(),
+            worldState: context.worldState.log(),
+            eventDescription: context.eventDescription,
+            recentBehaviorList: actionMemoryList,
+          }),
         },
         output: Output.object({
           schema: z.object({
@@ -87,27 +103,18 @@ export async function chooseActionAgent(
               .number()
               .optional()
               .describe("Action持续多少分钟，只有特殊的Action需要给出持续时间"),
-            planProposal: z
-              .object({
-                shortTermPlanTitles: z
-                  .array(z.string())
-                  .optional()
-                  .describe("如果需要修改短期计划，在此输出新的短期计划内容"),
-                longTermPlanTitle: z
-                  .string()
-                  .optional()
-                  .describe("如果需要修改长期计划，在此输出新的长期计划内容"),
-                reason: z.string().describe("如果本次更新了计划，在此说明为什么要更新计划"),
-              })
+            planChanges: z
+              .array(agentPlanChangeSchema)
+              .min(1)
               .optional()
-              .describe("只有确实需要调整计划时才输出；至少应包含一个计划标题字段"),
+              .describe("只有确实需要调整计划时才输出。输出前必须先调用 reviewPlanChanges。"),
           }),
         }),
         prompt: systemPrompt,
         stopWhen: stepCountIs(20),
       });
+
       logger.info("[chooseActionAgent] 选择行动结果", output);
-      logger.info("[chooseActionAgent reasoning]: ", reasoningText);
       return output;
     } catch (error) {
       logger.error("[chooseActionAgent] 选择行动失败", error);

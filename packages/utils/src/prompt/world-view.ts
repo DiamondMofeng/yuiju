@@ -23,12 +23,12 @@ export const worldViewPrompt = `
 `.trim();
 
 /**
- * 约束 chooseAction 阶段对 planProposal 的更新边界，避免模型把瞬时行动误写成长期计划，
+ * 约束 chooseAction 阶段对 planChanges 的更新边界，避免模型把瞬时行动误写成长期计划，
  * 或因措辞变化频繁重写计划状态。
  */
 const planUpdateGuidelinePrompt = `
 ## 计划更新规则
-### 长期计划（对应 planProposal.longTermPlanTitle）
+### 长期计划（scope = longTerm）
 - 长期计划是跨多天、多个阶段持续推进的方向性目标，强调“未来一段时间想达成什么”。
 - 适合写入长期计划的例子：
   - 攒钱购买想要的东西
@@ -40,7 +40,7 @@ const planUpdateGuidelinePrompt = `
 - 只有当角色的核心目标明显改变，或者原长期计划已经不再适用时，才更新长期计划。
 - 不要因为措辞润色、一次临时行动、或只是把同一个目标换一种说法，就改写长期计划。
 
-### 短期计划（对应 planProposal.shortTermPlanTitles）
+### 短期计划（scope = shortTerm）
 - 短期计划是接下来几小时到当天内要执行的具体安排，强调“接下来准备怎么做”。
 - 短期计划应当是可执行、可感知的事项，通常用于服务当前长期计划或应对当前情境。
 - 如果一次远距离移动会明显占用接下来一段时间，或它本身就是当前安排的重要组成部分，可以写入短期计划；但应优先写“去哪里做什么”，不要把连续路径拆成多个移动步骤。
@@ -57,12 +57,19 @@ const planUpdateGuidelinePrompt = `
 - 如果现有短期计划仍然有效，应尽量保留，不要因为当前 action 切换就重写整组计划。
 
 ### 输出要求
-- 只有在确实需要变更计划时，才输出 \`planProposal\`。
-- 如果只是从短期计划中的某一步切换到下一步，且原计划仍然成立，可以不输出 \`planProposal\`。
+- 只有在确实需要变更计划时，才输出 \`planChanges\`。
+- 如果只是从短期计划中的某一步切换到下一步，且原计划仍然成立，可以不输出 \`planChanges\`。
 - 如果当前行动只是满足即时需求（如吃饭、休息、发呆），通常不需要改写长期计划；只有当这会改变接下来一段时间的安排时，才考虑更新短期计划。
-- 只要输出了 \`planProposal\`，就必须至少提供 \`planProposal.longTermPlanTitle\` 或 \`planProposal.shortTermPlanTitles\` 之一。
-- 只要输出了 \`planProposal\`，就必须同时输出 \`planProposal.reason\`。
-- \`planProposal.reason\` 要直接说明触发这次计划调整的原因，例如当前状态变化、外部事件、已有计划失效，或接下来安排发生了明显变化；不要只写空泛目标。
+- 拟定好 \`planChanges\` 后，必须先调用 \`reviewPlanChanges\` 审查；只有审查通过的那一版 \`planChanges\` 才能写进最终 JSON。
+- \`planChanges\` 中每一项都使用统一结构：\`scope\`、\`changeType\`、\`currentPlan?\`、\`nextPlan?\`、\`reason\`。
+- 字段组合必须合法：
+  - \`created\`：只填写 \`nextPlan\`
+  - \`updated\`：必须同时填写 \`currentPlan\` 和 \`nextPlan\`
+  - \`abandoned\`：只填写 \`currentPlan\`
+  - \`completed\`：只填写 \`currentPlan\`
+- \`updated\` 必须表示计划内容真的变了，不能只是换个说法。
+- \`completed\` 必须表示“已经完成”，不能表示“接下来准备去做”。
+- 每一项 \`reason\` 都要直接说明触发这次变更的依据，例如当前状态变化、外部事件、已有计划失效，或某个计划已经达成；不要只写空泛目标。
 `.trim();
 
 /**

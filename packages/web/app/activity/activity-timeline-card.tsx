@@ -199,7 +199,6 @@ export function ActivityTimelineCard({
                 <SelectItem value="plan_updated">plan_updated</SelectItem>
                 <SelectItem value="plan_completed">plan_completed</SelectItem>
                 <SelectItem value="plan_abandoned">plan_abandoned</SelectItem>
-                <SelectItem value="plan_superseded">plan_superseded</SelectItem>
                 <SelectItem value="system">system</SelectItem>
               </SelectContent>
             </Select>

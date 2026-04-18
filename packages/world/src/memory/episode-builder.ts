@@ -233,7 +233,7 @@ function hasPlanTitleChanged(change: Pick<PlanChange, "before" | "after">): bool
  *
  * 说明：
  * - created / updated 关注“计划内容”；
- * - completed / abandoned / superseded 关注“原计划进入终态”，避免错误展示成“有了一个同名新计划”。
+ * - completed / abandoned 关注“原计划进入终态”，避免错误展示成“有了一个同名新计划”。
  */
 function buildPlanLifecycleSummaryText(
   change: PlanChange,
@@ -279,15 +279,6 @@ function buildPlanLifecycleSummaryText(
       ]
         .filter((item): item is string => Boolean(item))
         .join("；");
-    case "superseded":
-      return [
-        prefix,
-        `计划：${stringifyPlanValue(change.before?.title)}`,
-        "结果：已被替代",
-        planReason && `原因：${planReason}`,
-      ]
-        .filter((item): item is string => Boolean(item))
-        .join("；");
     default:
       return prefix;
   }
@@ -303,8 +294,6 @@ function mapPlanChangeTypeToEpisodeType(changeType: PlanChange["changeType"]): M
       return "plan_completed";
     case "abandoned":
       return "plan_abandoned";
-    case "superseded":
-      return "plan_superseded";
     default:
       return "system";
   }
@@ -332,8 +321,6 @@ function describeChangeType(changeType: PlanChange["changeType"]): string {
       return "完成了";
     case "abandoned":
       return "放弃了";
-    case "superseded":
-      return "替换了";
     default:
       return "更新了";
   }
