@@ -182,7 +182,7 @@ export function HomePageHeader({ summary }: HomePageHeaderProps) {
 
       return {
         didTrim,
-        next: finalMessages.map((message) => createHomeMessage(message)),
+        next: finalMessages,
       };
     },
     [userName],
