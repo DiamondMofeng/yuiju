@@ -2,12 +2,15 @@ import "@yuiju/utils/env";
 import process from "node:process";
 import { connectDB } from "@yuiju/utils";
 import { startRealtimeLoop } from "@/engine/runner";
+import { startWeatherScheduler, syncCurrentWeather } from "@/engine/weather";
 import { logger } from "@/utils/logger";
 import { initState } from "./state";
 
 async function main() {
   await connectDB();
   await initState();
+  await syncCurrentWeather();
+  startWeatherScheduler();
 
   process.on("uncaughtException", (err) => {
     logger.error({

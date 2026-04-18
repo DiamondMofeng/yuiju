@@ -5,6 +5,7 @@ import {
   CAFE_COFFEES,
   type CafeCoffee,
   type CafeCoffeeName,
+  type ChoiceOption,
   MajorScene,
 } from "@yuiju/utils";
 import { chooseCafeCoffeeAgent } from "@/llm/agent";
@@ -39,7 +40,7 @@ function isCafeWorkTimeWithAtLeastOneHourLeft(time: { hour: () => number; minute
 }
 
 /**
- * 判断字符串是否为咖啡店的合法咖啡名。
+ * 判断字符串是否为薄暮咖啡馆的合法咖啡名。
  *
  * 说明：
  * - 背包 item.name 的类型是 string（来源可能很多），这里通过清单做一次收窄；
@@ -65,7 +66,7 @@ function getAvailableCafeCoffeeNames(context: {
 export const cafeAction: ActionMetadata[] = [
   {
     action: ActionId.Order_Coffee,
-    description: "在咖啡店点单。[金币-?][耗时10分钟]",
+    description: "在薄暮咖啡馆点单。[金币-?][耗时10分钟]",
     precondition(context) {
       return allTrue([
         () => isAtCafe(context.characterState.location.major),
@@ -75,7 +76,7 @@ export const cafeAction: ActionMetadata[] = [
     async executor(context) {
       await context.characterState.setAction(ActionId.Order_Coffee);
 
-      const coffeeList = CAFE_COFFEES.map((coffee) => {
+      const coffeeList: ChoiceOption[] = CAFE_COFFEES.map((coffee) => {
         return {
           value: coffee.name,
           description: formatCoffeeDescription(coffee),
@@ -173,8 +174,7 @@ export const cafeAction: ActionMetadata[] = [
   },
   {
     action: ActionId.Work_At_Cafe,
-    // TODO：没有饱腹度变化
-    description: "在咖啡店打工。[金币+200][体力-6][心情-2][耗时60分钟]",
+    description: "在薄暮咖啡馆打工。[金币+200][体力-10][心情-5][饱腹-10][耗时60分钟]",
     precondition(context) {
       return allTrue([
         () => isAtCafe(context.characterState.location.major),
@@ -184,28 +184,30 @@ export const cafeAction: ActionMetadata[] = [
     async executor(context) {
       await context.characterState.setAction(ActionId.Work_At_Cafe);
       await context.characterState.changeMoney(200);
-      await context.characterState.changeStamina(-6);
-      await context.characterState.changeMood(-2);
+      await context.characterState.changeStamina(-10);
+      await context.characterState.changeSatiety(-10);
+      await context.characterState.changeMood(-5);
       return "打工1小时，赚了200元";
     },
     durationMin: 60,
   },
   {
     action: ActionId.Go_Home_From_Cafe,
-    description: "从咖啡店回家。[体力-3][耗时20分钟]",
+    description: "从薄暮咖啡馆回家。[体力-5][饱腹-3][耗时20分钟]",
     precondition(context) {
       return isAtCafe(context.characterState.location.major);
     },
     async executor(context) {
       await context.characterState.setAction(ActionId.Go_Home_From_Cafe);
       await context.characterState.setLocation({ major: MajorScene.Home });
-      await context.characterState.changeStamina(-3);
+      await context.characterState.changeStamina(-5);
+      await context.characterState.changeSatiety(-3);
     },
     durationMin: 20,
   },
   {
     action: ActionId.Go_To_School_From_Cafe,
-    description: "从咖啡店去学校。[体力-3][耗时10分钟]",
+    description: "从薄暮咖啡馆去星见丘高校。[体力-3][饱腹-2][耗时10分钟]",
     precondition(context) {
       return isAtCafe(context.characterState.location.major);
     },
@@ -213,6 +215,7 @@ export const cafeAction: ActionMetadata[] = [
       await context.characterState.setAction(ActionId.Go_To_School_From_Cafe);
       await context.characterState.setLocation({ major: MajorScene.School });
       await context.characterState.changeStamina(-3);
+      await context.characterState.changeSatiety(-2);
     },
     durationMin: 10,
   },

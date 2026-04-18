@@ -21,19 +21,19 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
   - `src/action/`：行为系统（按场景划分：家中/学校/通用/商店/咖啡馆）
   - `src/state/`：角色和世界状态管理
   - `src/llm/`：LLM 决策和工具调用
-- **开发命令**：`pnpm dev:world`、`pnpm start:world`、`pnpm test:world`
+- **开发命令**：`pnpm run dev:world`、`pnpm run start:world`、`pnpm run test:world`
 
 ### 2. @yuiju/message（消息服务）
 
 - **核心功能**：提供与外部系统的消息通信功能
 - **技术栈**：使用 node-napcat-ts 进行消息处理
-- **开发命令**：`pnpm dev:message`、`pnpm start:message`
+- **开发命令**：`pnpm run dev:message`、`pnpm run start:message`
 
 ### 3. @yuiju/web（Web 界面）
 
 - **核心功能**：提供可视化界面，用于观察角色状态和世界运行
 - **技术栈**：Next.js 16 + React 19 + Tailwind CSS 4
-- **开发命令**：`pnpm dev:web`、`pnpm start:web`、`pnpm build:web`
+- **开发命令**：`pnpm run dev:web`、`pnpm run start:web`、`pnpm run build:web`
 
 ### 4. @yuiju/utils（工具库）
 
@@ -46,8 +46,8 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ### 6. packages/python（Python 服务）
 
-- **核心功能**：提供额外的 Python 服务（如机器学习模型）
-- **开发命令**：`pnpm start:python`
+- **核心功能**：提供 Graphiti 长期记忆服务，已废弃
+- **开发命令**：`pnpm run start:python`
 
 ## 常用开发命令
 
@@ -78,11 +78,11 @@ pnpm run type-check:world # 只检查 world 包
 ### 运行开发服务器
 
 ```bash
-# 同时启动所有服务（推荐使用 pm2 或类似工具）
+# 推荐本地联调组合
 pnpm run dev:world       # 启动世界模拟引擎
-pnpm run dev:message     # 启动消息服务
 pnpm run dev:web         # 启动 Web 界面（端口 3010）
-pnpm run start:python    # 启动 Python 服务（端口 9196）
+pnpm run dev:message     # 按需启动消息服务
+pnpm run start:python    # 仅在需要 Python 能力时启动
 ```
 
 ### 运行测试
@@ -94,12 +94,17 @@ pnpm run test:world      # 运行世界模拟引擎的所有测试
 ### 生产环境启动
 
 ```bash
-pnpm run start:world
-pnpm run start:message
-pnpm run start:web
+pnpm run start           # 使用 PM2 启动 ecosystem.config.js 中的全部服务
+pnpm run restart        # 使用 PM2 重启全部服务
+pnpm run stop           # 使用 PM2 停止全部服务
 ```
 
 ## 代码规范
+
+### 补充规则
+
+- 涉及代码重构、抽象取舍、函数拆分、删除中间层、判断是否过度设计时，请同时参考 `docs/rules/refactor-style.md`
+- 涉及日常实现风格、字段设计、配置显式性、单一真相源、注释取舍等问题时，请同时参考 `docs/rules/implementation-style.md`
 
 ### 格式化工具
 
@@ -115,21 +120,26 @@ pnpm run start:web
 - 严格模式：开启
 - 编译目标：ESNext
 
-### 环境变量
+### 项目配置
 
-项目依赖以下环境变量（定义在根目录 `.env` 文件）：
+当前项目的业务配置统一来自根目录 `yuiju.config.ts`，可基于 `yuiju.config.ts.example` 创建本地配置：
 
 ```bash
-# LLM API
-DEEPSEEK_API_KEY=xxx
-
-# 数据库
-MONGODB_URI=mongodb://localhost:27017/yuiju
-REDIS_URL=redis://localhost:6379
-
-# 运行环境
-NODE_ENV=development | production
+cp yuiju.config.ts.example yuiju.config.ts
 ```
+
+关键配置项：
+
+- `database.mongoUri`
+- `database.redisUrl`
+- `llm.deepseekApiKey`
+- `message.napcat`
+- `app.publicDeployment`
+
+额外说明：
+
+- `NODE_ENV` 仍然是运行时环境变量，不放在 `yuiju.config.ts` 中
+- 根目录 `package.json` 未声明 `pm2` 依赖，执行 `pnpm run start` 前需要系统中已有可用 `pm2` 命令
 
 ## 关键架构概念
 

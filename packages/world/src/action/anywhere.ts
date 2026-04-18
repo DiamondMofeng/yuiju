@@ -2,6 +2,7 @@ import {
   type ActionContext,
   ActionId,
   type ActionMetadata,
+  type ChoiceOption,
   allTrue,
   type FoodMetadata,
 } from "@yuiju/utils";
@@ -11,7 +12,7 @@ import { logger } from "@/utils/logger";
 import { resolveFoodRecoveryPerUnit } from "../utils/food-utils";
 import { notDoneToday } from "./utils";
 
-function getAvailableFoodParameters(context: ActionContext) {
+function getAvailableFoodOptions(context: ActionContext): ChoiceOption[] {
   const inventory = context.characterState.inventory || [];
   const availableFood = inventory.filter((item) => item.category === "food" && item.quantity! > 0);
 
@@ -34,13 +35,13 @@ export const anywhereAction: ActionMetadata[] = [
     async executor(context) {
       await context.characterState.setAction(ActionId.Idle);
     },
-    async durationMin(_context, durationMinute) {
-      return durationMinute ?? 10;
+    async durationMin(_context, selectedAction) {
+      return selectedAction?.durationMinute ?? 10;
     },
   },
   {
     action: ActionId.Eat_Lunch,
-    description: "吃午饭。[体力+50][饱腹+30][耗时20分钟]",
+    description: "吃午饭。[体力+50][饱腹+50][耗时20分钟]",
     precondition(context) {
       const hour = context.worldState.time.get("hour");
       return allTrue([
@@ -51,7 +52,7 @@ export const anywhereAction: ActionMetadata[] = [
     async executor(context) {
       await context.characterState.setAction(ActionId.Eat_Lunch);
       await context.characterState.changeStamina(50);
-      await context.characterState.changeSatiety(30);
+      await context.characterState.changeSatiety(50);
       await context.characterState.markActionDoneToday(ActionId.Eat_Lunch);
     },
     durationMin: 20,
@@ -63,12 +64,12 @@ export const anywhereAction: ActionMetadata[] = [
     precondition: (context) => {
       return allTrue([
         () => {
-          return getAvailableFoodParameters(context).length > 0;
+          return getAvailableFoodOptions(context).length > 0;
         },
       ]);
     },
     async executor(context) {
-      const foodList = getAvailableFoodParameters(context);
+      const foodList = getAvailableFoodOptions(context);
       if (foodList.length === 0) {
         return "没有可吃的食物。";
       }

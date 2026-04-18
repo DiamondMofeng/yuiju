@@ -32,32 +32,45 @@ src/
 
 ## 依赖关系
 
-- `@yuiju/utils`：环境变量、数据库连接、消息记录存储
+- `@yuiju/utils`：统一配置读取、数据库连接、消息记录存储
 - `@yuiju/source`：提示词与对话相关内容
 - `node-napcat-ts`：NapCat WebSocket 客户端
 
-## 环境变量
+## 项目配置
 
-依赖根目录 `.env` 中的以下配置：
+消息服务依赖根目录 `yuiju.config.ts` 中的以下配置：
 
-- `DEEPSEEK_API_KEY`
-- `MONGO_URI`
-- `NAPCAT_TOKEN`
+- `database.mongoUri`
+- `llm.deepseekApiKey`
+- `message.napcat`
+- `message.whiteList`
+- `message.groupWhiteList`
+
+首次使用时，先基于示例文件创建本地配置：
+
+```bash
+cp yuiju.config.ts.example yuiju.config.ts
+```
+
+额外说明：
+
+- `NODE_ENV` 仍然是运行时环境变量，不在 `yuiju.config.ts` 中
+- 终端调试模式不依赖 NapCat，但真实消息平台模式需要 `message.napcat` 可正常连接
 
 ## 运行命令
 
 ```bash
 # 终端调试模式
-pnpm dev:message
+pnpm run dev:message
 
 # 示例脚本
-pnpm demo:message
+pnpm run demo:message
 
 # 生产模式
-pnpm start:message
+pnpm run start:message
 
 # 类型检查
-pnpm --filter @yuiju/message run type-check
+pnpm run type-check:message
 ```
 
 ## 使用说明
@@ -67,7 +80,7 @@ pnpm --filter @yuiju/message run type-check
 适合本地快速验证对话链路，不依赖 NapCat。
 
 ```bash
-pnpm dev:message
+pnpm run dev:message
 ```
 
 ### NapCat 模式
@@ -75,15 +88,15 @@ pnpm dev:message
 适合接入真实消息平台，启动前需要确保：
 
 - NapCat 服务可连接
-- `NAPCAT_TOKEN` 已正确配置
-- `DEEPSEEK_API_KEY` 与 `MONGO_URI` 可用
+- `yuiju.config.ts` 中的 `message.napcat` 已正确配置
+- `yuiju.config.ts` 中的 `llm.deepseekApiKey` 与 `database.mongoUri` 可用
 
 ```bash
-pnpm start:message
+pnpm run start:message
 ```
 
 ## 注意事项
 
 - `server.ts` 会在启动时先连接 MongoDB，再连接 NapCat。
-- 若未配置 `DEEPSEEK_API_KEY`，消息服务会直接返回提示文案，不会继续调用模型。
+- 若未配置 `llm.deepseekApiKey`，消息服务会直接返回提示文案，不会继续调用模型。
 - 开发环境建议优先使用 `terminal.ts`，排查问题更直接。

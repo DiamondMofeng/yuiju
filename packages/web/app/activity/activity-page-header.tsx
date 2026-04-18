@@ -14,7 +14,7 @@ export function ActivityPageHeader({ count }: ActivityPageHeaderProps) {
       </div>
 
       <Badge variant="pill" size="default" className="whitespace-nowrap">
-        <span className="text-[#6b7480]">今日记录</span>&nbsp;
+        <span className="text-[#6b7480]">动态记录</span>&nbsp;
         <strong>{displayCount}</strong>
       </Badge>
     </div>

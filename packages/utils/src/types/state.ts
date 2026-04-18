@@ -1,12 +1,16 @@
 import type { Dayjs } from "dayjs";
 import type { ActionId } from "./action";
+import type { WeatherSnapshot } from "./weather";
 
 // 大场景
 export enum MajorScene {
   Home = "家",
-  School = "学校",
-  Shop = "商店",
-  Cafe = "咖啡店",
+  School = "星见丘高校",
+  Shop = "小町商店",
+  Cafe = "薄暮咖啡馆",
+  Park = "南风公园",
+  Shrine = "结灯神社",
+  Coast = "月汐海岸",
 }
 
 // 家的小场景
@@ -14,18 +18,30 @@ export enum HomeSubScene {
   House = "house",
 }
 
-// 学校的小场景
+// 星见丘高校的小场景
 export enum SchoolSubScene {}
 
-// 商店的小场景（预留）
+// 小町商店的小场景（预留）
 export enum ShopSubScene {}
+
+// 南风公园的小场景（预留）
+export enum ParkSubScene {}
+
+// 结灯神社的小场景（预留）
+export enum ShrineSubScene {}
+
+// 海岸的小场景（预留）
+export enum CoastSubScene {}
 
 // 位置类型（判别联合）
 export type Location =
   | { major: MajorScene.Home; minor?: HomeSubScene }
   | { major: MajorScene.School; minor?: SchoolSubScene }
   | { major: MajorScene.Shop; minor?: ShopSubScene }
-  | { major: MajorScene.Cafe; minor?: undefined };
+  | { major: MajorScene.Cafe; minor?: undefined }
+  | { major: MajorScene.Park; minor?: ParkSubScene }
+  | { major: MajorScene.Shrine; minor?: ShrineSubScene }
+  | { major: MajorScene.Coast; minor?: CoastSubScene };
 
 /**
  * 食物元数据
@@ -144,10 +160,13 @@ export interface ICharacterState extends CharacterStateData {
 
 export interface WorldStateData {
   time: Dayjs;
+  weather: WeatherSnapshot | null;
 }
 
 export interface IWorldState extends WorldStateData {
   log(): WorldStateData;
   updateTime(newTime?: Dayjs): Promise<void>;
+  setWeather(snapshot: WeatherSnapshot): Promise<void>;
+  getWeather(): WeatherSnapshot | null;
   reset(): Promise<void>;
 }

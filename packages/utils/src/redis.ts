@@ -9,6 +9,9 @@ import {
   MajorScene,
   type PlanState,
   type RunningActionState,
+  TEMPERATURE_LEVELS,
+  WEATHER_TYPES,
+  type WeatherSnapshot,
   type WorldStateData,
 } from "./types";
 import { safeParseJson } from "./utils";
@@ -50,8 +53,7 @@ const DEFAULT_CHARACTER_STATE_DATA: CharacterStateData = {
 };
 
 const DEFAULT_PLAN_STATE: PlanState = {
-  activePlanIds: [],
-  activePlans: [],
+  shortTermPlans: [],
   updatedAt: new Date(0).toISOString(),
 };
 
@@ -65,6 +67,53 @@ const isMajorScene = (value: unknown): value is MajorScene => {
 
 const isValidIsoDateString = (value: unknown): value is string => {
   return typeof value === "string" && dayjs(value).isValid();
+};
+
+const isWeatherType = (value: unknown): value is WeatherSnapshot["type"] => {
+  return typeof value === "string" && WEATHER_TYPES.includes(value as WeatherSnapshot["type"]);
+};
+
+const isTemperatureLevel = (value: unknown): value is WeatherSnapshot["temperatureLevel"] => {
+  return (
+    typeof value === "string" &&
+    TEMPERATURE_LEVELS.includes(value as WeatherSnapshot["temperatureLevel"])
+  );
+};
+
+const parseWeatherSnapshot = (value: unknown): WeatherSnapshot | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const maybeWeather = value as Partial<WeatherSnapshot>;
+
+  if (!isWeatherType(maybeWeather.type)) {
+    return null;
+  }
+
+  if (!isTemperatureLevel(maybeWeather.temperatureLevel)) {
+    return null;
+  }
+
+  if (!isValidIsoDateString(maybeWeather.periodStartAt)) {
+    return null;
+  }
+
+  if (!isValidIsoDateString(maybeWeather.periodEndAt)) {
+    return null;
+  }
+
+  if (!isValidIsoDateString(maybeWeather.updatedAt)) {
+    return null;
+  }
+
+  return {
+    type: maybeWeather.type,
+    temperatureLevel: maybeWeather.temperatureLevel,
+    periodStartAt: maybeWeather.periodStartAt,
+    periodEndAt: maybeWeather.periodEndAt,
+    updatedAt: maybeWeather.updatedAt,
+  };
 };
 
 const parseRunningActionState = (value: unknown): RunningActionState | null => {
@@ -214,31 +263,22 @@ export const initPlanStateData = async (): Promise<PlanState> => {
 
   if (!raw) {
     await redis.set(REDIS_KEY_PLAN_STATE, JSON.stringify(DEFAULT_PLAN_STATE));
-    return { ...DEFAULT_PLAN_STATE, activePlanIds: [], activePlans: [] };
+    return { ...DEFAULT_PLAN_STATE, shortTermPlans: [] };
   }
 
   const parsed = safeParseJson<PlanState>(raw);
   if (!parsed || typeof parsed !== "object") {
     await redis.set(REDIS_KEY_PLAN_STATE, JSON.stringify(DEFAULT_PLAN_STATE));
-    return { ...DEFAULT_PLAN_STATE, activePlanIds: [], activePlans: [] };
+    return { ...DEFAULT_PLAN_STATE, shortTermPlans: [] };
   }
 
   const maybeState = parsed as Partial<PlanState>;
-  const activePlans = Array.isArray(maybeState.activePlans) ? maybeState.activePlans : [];
-  const mainPlan = maybeState.mainPlan;
-  const mainPlanId =
-    typeof maybeState.mainPlanId === "string" ? maybeState.mainPlanId : maybeState.mainPlan?.id;
-  const activePlanIds = Array.isArray(maybeState.activePlanIds)
-    ? maybeState.activePlanIds.filter((item): item is string => typeof item === "string")
-    : activePlans
-        .map((plan) => (typeof plan?.id === "string" ? plan.id : undefined))
-        .filter((item): item is string => Boolean(item));
+  const shortTermPlans = Array.isArray(maybeState.shortTermPlans) ? maybeState.shortTermPlans : [];
+  const longTermPlan = maybeState.longTermPlan;
 
   return {
-    mainPlanId,
-    activePlanIds,
-    mainPlan,
-    activePlans,
+    longTermPlan,
+    shortTermPlans,
     updatedAt:
       typeof maybeState.updatedAt === "string"
         ? maybeState.updatedAt
@@ -256,20 +296,26 @@ export const savePlanStateData = async (state: PlanState): Promise<void> => {
 
 export const initWorldStateData = async (): Promise<WorldStateData> => {
   const redis = getRedis();
-  const timeStr = await redis.hget(REDIS_KEY_WORLD_STATE, "time");
+  const raw = await redis.hgetall(REDIS_KEY_WORLD_STATE);
+  const timeStr = raw.time;
 
   if (!timeStr) {
     const time = dayjs();
     await redis.hset(REDIS_KEY_WORLD_STATE, "time", time.toISOString());
-    return { time };
+    return { time, weather: null };
   }
 
   const parsed = dayjs(timeStr);
   if (!parsed.isValid()) {
     const time = dayjs();
     await redis.hset(REDIS_KEY_WORLD_STATE, "time", time.toISOString());
-    return { time };
+    return { time, weather: null };
   }
 
-  return { time: parsed };
+  const weather = raw.weather ? parseWeatherSnapshot(safeParseJson(raw.weather)) : null;
+
+  return {
+    time: parsed,
+    weather,
+  };
 };

@@ -1,18 +1,25 @@
+import type {
+  ActionAgentDecision,
+  ActionContext,
+  ActionMetadata,
+  BehaviorRecord,
+  ChoiceOption,
+  PlanState,
+} from "@yuiju/utils";
 import {
   chooseActionPrompt,
   chooseCafeCoffeePrompt,
   chooseFoodPrompt,
   chooseShopProductPrompt,
-} from "@yuiju/source";
-import type {
-  ActionAgentDecision,
-  ActionContext,
-  ActionMetadata,
-  ActionParameter,
-  BehaviorRecord,
-  PlanState,
+  chooseShrinePrayerPrompt,
+  diarySearchTool,
+  getPersonMemoryTool,
+  listPersonMemoriesTool,
+  queryWorldMapTool,
+  reviewPlanChangesTool,
+  strongModel,
+  todayEventSearchTool,
 } from "@yuiju/utils";
-import { strongModel, memorySearchTool as unifiedMemorySearchTool } from "@yuiju/utils";
 import { generateText, Output, stepCountIs } from "ai";
 import dayjs from "dayjs";
 import { z } from "zod";
@@ -20,6 +27,14 @@ import { logger } from "@/utils/logger";
 import { queryAvailableFood } from "./tools";
 
 const RETRY_COUNT = 3;
+
+const agentPlanChangeSchema = z.object({
+  scope: z.enum(["longTerm", "shortTerm"]).describe("计划类型，长期计划还是短期计划"),
+  changeType: z.enum(["created", "updated", "abandoned", "completed"]).describe("计划变更类型。"),
+  currentPlan: z.string().optional().describe("原计划内容"),
+  nextPlan: z.string().optional().describe("新计划内容"),
+  reason: z.string().describe("这次变更的原因。"),
+});
 
 type ParameterAgentSelectedItem = {
   value: string;
@@ -34,6 +49,11 @@ export type ShopProductAgentDecision = {
   selectedList: ParameterAgentSelectedItem[];
 };
 
+export type ShrinePrayerAgentDecision = {
+  shouldOffer: boolean;
+  wish?: string;
+};
+
 /**
  *
  * 选择 Action
@@ -46,31 +66,36 @@ export async function chooseActionAgent(
 ): Promise<ActionAgentDecision | undefined> {
   const systemPrompt = chooseActionPrompt({
     actionList,
-    currentAction: context.characterState.action,
-    money: context.characterState.money,
-    stamina: context.characterState.stamina,
-    satiety: context.characterState.satiety,
-    mood: context.characterState.mood,
-    worldTime: context.worldState.time,
+    characterState: context.characterState,
+    worldState: context.worldState,
+    eventDescription: context.eventDescription,
     recentBehaviorList: actionMemoryList.map((item) => ({
       behavior: item.behavior,
       description: item.description,
       time: dayjs(item.timestamp),
     })),
-    location: `${context.characterState.location.major}${
-      context.characterState.location.minor ? `-${context.characterState.location.minor}` : ""
-    }`,
-    mainPlanTitle: planState.mainPlan?.title,
-    activePlanTitles: planState.activePlans.map((plan) => plan.title),
+    longTermPlanTitle: planState.longTermPlan?.title,
+    shortTermPlanTitles: planState.shortTermPlans.map((plan) => plan.title),
   });
 
   for (let i = 0; i < RETRY_COUNT; i++) {
     try {
-      const { output, reasoningText } = await generateText({
+      const { output } = await generateText({
         model: strongModel,
         tools: {
-          memorySearch: unifiedMemorySearchTool,
+          todayEventSearch: todayEventSearchTool,
+          diarySearch: diarySearchTool,
+          listPersonMemories: listPersonMemoriesTool,
+          getPersonMemory: getPersonMemoryTool,
           queryAvailableFood: queryAvailableFood(context),
+          queryWorldMap: queryWorldMapTool,
+          reviewPlanChanges: reviewPlanChangesTool({
+            planState,
+            characterState: context.characterState.log(),
+            worldState: context.worldState.log(),
+            eventDescription: context.eventDescription,
+            recentBehaviorList: actionMemoryList,
+          }),
         },
         output: Output.object({
           schema: z.object({
@@ -82,21 +107,18 @@ export async function chooseActionAgent(
               .number()
               .optional()
               .describe("Action持续多少分钟，只有特殊的Action需要给出持续时间"),
-            updateShortTermPlan: z
-              .array(z.string())
+            planChanges: z
+              .array(agentPlanChangeSchema)
+              .min(1)
               .optional()
-              .describe("如果需要修改短期计划，在此输出新的计划内容"),
-            updateLongTermPlan: z
-              .string()
-              .optional()
-              .describe("如果需要修改长期计划，在此输出新的计划内容"),
+              .describe("只有确实需要调整计划时才输出。输出前必须先调用 reviewPlanChanges。"),
           }),
         }),
         prompt: systemPrompt,
         stopWhen: stepCountIs(20),
       });
+
       logger.info("[chooseActionAgent] 选择行动结果", output);
-      logger.info("[chooseActionAgent reasoning]: ", reasoningText);
       return output;
     } catch (error) {
       logger.error("[chooseActionAgent] 选择行动失败", error);
@@ -109,22 +131,17 @@ export async function chooseActionAgent(
  * 选择食物
  */
 export async function chooseFoodAgent(
-  foodList: ActionParameter[],
+  foodList: ChoiceOption[],
   context: ActionContext,
   actionMemoryList: BehaviorRecord[],
   planState: PlanState,
 ) {
   const systemPrompt = chooseFoodPrompt({
     availableFood: foodList,
-    location: `${context.characterState.location.major}${
-      context.characterState.location.minor ? "-" + context.characterState.location.minor : ""
-    }`,
-    stamina: context.characterState.stamina,
-    satiety: context.characterState.satiety,
-    mood: context.characterState.mood,
-    worldTime: context.worldState.time,
-    mainPlanTitle: planState.mainPlan?.title,
-    activePlanTitles: planState.activePlans.map((plan) => plan.title),
+    characterState: context.characterState,
+    worldState: context.worldState,
+    longTermPlanTitle: planState.longTermPlan?.title,
+    shortTermPlanTitles: planState.shortTermPlans.map((plan) => plan.title),
     recentBehaviorList: actionMemoryList.map((item) => ({
       behavior: item.behavior,
       description: item.description,
@@ -165,7 +182,7 @@ export async function chooseFoodAgent(
  * 选择购买商品
  */
 export async function chooseShopProductAgent(
-  productList: ActionParameter[],
+  productList: ChoiceOption[],
   context: ActionContext,
   actionMemoryList: BehaviorRecord[],
   planState: PlanState,
@@ -176,16 +193,10 @@ export async function chooseShopProductAgent(
 
   const systemPrompt = chooseShopProductPrompt({
     availableProducts: productList,
-    location: `${context.characterState.location.major}${
-      context.characterState.location.minor ? "-" + context.characterState.location.minor : ""
-    }`,
-    stamina: context.characterState.stamina,
-    satiety: context.characterState.satiety,
-    mood: context.characterState.mood,
-    money: context.characterState.money,
-    worldTime: context.worldState.time,
-    mainPlanTitle: planState.mainPlan?.title,
-    activePlanTitles: planState.activePlans.map((plan) => plan.title),
+    characterState: context.characterState,
+    worldState: context.worldState,
+    longTermPlanTitle: planState.longTermPlan?.title,
+    shortTermPlanTitles: planState.shortTermPlans.map((plan) => plan.title),
     recentBehaviorList: actionMemoryList.map((item) => ({
       behavior: item.behavior,
       description: item.description,
@@ -219,7 +230,7 @@ export async function chooseShopProductAgent(
  * 选择咖啡
  */
 export async function chooseCafeCoffeeAgent(
-  coffeeList: ActionParameter[],
+  coffeeList: ChoiceOption[],
   context: ActionContext,
   actionMemoryList: BehaviorRecord[],
   planState: PlanState,
@@ -230,16 +241,10 @@ export async function chooseCafeCoffeeAgent(
 
   const systemPrompt = chooseCafeCoffeePrompt({
     availableCoffees: coffeeList,
-    location: `${context.characterState.location.major}${
-      context.characterState.location.minor ? "-" + context.characterState.location.minor : ""
-    }`,
-    stamina: context.characterState.stamina,
-    satiety: context.characterState.satiety,
-    mood: context.characterState.mood,
-    money: context.characterState.money,
-    worldTime: context.worldState.time,
-    mainPlanTitle: planState.mainPlan?.title,
-    activePlanTitles: planState.activePlans.map((plan) => plan.title),
+    characterState: context.characterState,
+    worldState: context.worldState,
+    longTermPlanTitle: planState.longTermPlan?.title,
+    shortTermPlanTitles: planState.shortTermPlans.map((plan) => plan.title),
     recentBehaviorList: actionMemoryList.map((item) => ({
       behavior: item.behavior,
       description: item.description,
@@ -264,6 +269,52 @@ export async function chooseCafeCoffeeAgent(
       return output;
     } catch (error) {
       logger.error("[chooseCafeCoffeeAgent] 选择咖啡失败", error);
+    }
+  }
+}
+
+/**
+ *
+ * 选择神社参拜方式
+ */
+export async function chooseShrinePrayerAgent(
+  context: ActionContext,
+  actionMemoryList: BehaviorRecord[],
+  planState: PlanState,
+  offeringCost: number,
+  selectedAction: ActionAgentDecision,
+): Promise<ShrinePrayerAgentDecision | undefined> {
+  const systemPrompt = chooseShrinePrayerPrompt({
+    actionReason: selectedAction.reason,
+    characterState: context.characterState,
+    worldState: context.worldState,
+    offeringCost,
+    longTermPlanTitle: planState.longTermPlan?.title,
+    shortTermPlanTitles: planState.shortTermPlans.map((plan) => plan.title),
+    recentBehaviorList: actionMemoryList.map((item) => ({
+      behavior: item.behavior,
+      description: item.description,
+      time: dayjs(item.timestamp),
+    })),
+  });
+
+  for (let i = 0; i < RETRY_COUNT; i++) {
+    try {
+      const { output } = await generateText({
+        model: strongModel,
+        output: Output.object({
+          schema: z.object({
+            shouldOffer: z.boolean().describe("这次是否投币参拜"),
+            wish: z.string().max(40).optional().describe("只有在投币时才填写的一句简短祈愿"),
+          }),
+        }),
+        prompt: systemPrompt,
+      });
+
+      logger.info("[chooseShrinePrayerAgent] 神社参拜决策结果", output);
+      return output;
+    } catch (error) {
+      logger.error("[chooseShrinePrayerAgent] 神社参拜决策失败", error);
     }
   }
 }

@@ -1,13 +1,13 @@
 import {
+  type ActionAgentDecision,
   type ActionContext,
   ActionId,
-  type ActionParameter,
-  DEFAULT_MEMORY_SUBJECT_ID,
   emitMemoryEpisode,
   getRecentMemoryEpisodes,
   isDev,
-  processPendingMemoryEpisodes,
+  type PlanChange,
   type RunningActionState,
+  SUBJECT_NAME,
 } from "@yuiju/utils";
 import { getActionList } from "@/action";
 import { getActionById } from "@/action/utils";
@@ -21,17 +21,12 @@ import { logger } from "@/utils/logger";
 export async function getDurationTime(
   durationMin:
     | number
-    | ((
-        context: ActionContext,
-        llmDurationMin?: number,
-        parameters?: ActionParameter[],
-      ) => Promise<number>),
+    | ((context: ActionContext, selectedAction?: ActionAgentDecision) => Promise<number>),
   context: ActionContext,
-  llmDurationMin?: number,
-  parameters?: ActionParameter[],
+  selectedAction?: ActionAgentDecision,
 ) {
   if (typeof durationMin === "function") {
-    return durationMin(context, llmDurationMin, parameters);
+    return durationMin(context, selectedAction);
   } else {
     return durationMin;
   }
@@ -74,7 +69,7 @@ export async function tick(params: TickParams): Promise<TickReturn> {
   const recentBehaviors = await getRecentMemoryEpisodes({
     limit: 10,
     types: ["behavior"],
-    subject: DEFAULT_MEMORY_SUBJECT_ID,
+    subject: SUBJECT_NAME,
     isDev: isDev(),
     onlyDate: new Date(),
   });
@@ -89,57 +84,51 @@ export async function tick(params: TickParams): Promise<TickReturn> {
 
   if (actionMetadata && selectedAction) {
     const actionStartedAt = new Date();
-    const planProposal: {
-      mainPlanTitle?: string;
-      activePlanTitles?: string[];
-    } = {};
-    if ("updateLongTermPlan" in selectedAction) {
-      planProposal.mainPlanTitle = selectedAction.updateLongTermPlan;
-    }
-    if ("updateShortTermPlan" in selectedAction) {
-      planProposal.activePlanTitles = selectedAction.updateShortTermPlan;
-    }
+    let planChanges: PlanChange[] = [];
+    const agentPlanChanges = selectedAction.planChanges;
 
-    const planApplyResult = await planManager.applyProposal(planProposal);
-
-    // 根据 planApplyResult.changes 构建变更 episode
-    const planEpisodes = buildPlanUpdateEpisodes({
-      changes: planApplyResult.changes,
-      happenedAt: new Date(),
-      isDev: isDev(),
-    });
-
-    for (const planEpisode of planEpisodes) {
+    if (agentPlanChanges?.length) {
       try {
-        await emitMemoryEpisode(planEpisode);
-        logger.debug("[tick] built plan_update episode", planEpisode);
-        processPendingMemoryEpisodes({ limit: 1, isDev: isDev() }).catch((error) => {
-          logger.error("[tick] process pending memory episodes failed", error);
-        });
+        planChanges = (await planManager.applyPlanChanges(agentPlanChanges)).changes;
       } catch (error) {
-        logger.error("[tick] write plan_update episode failed", error);
+        logger.warn("[tick] apply planChanges failed, ignore current planChanges", {
+          error,
+          planChanges: agentPlanChanges,
+        });
+      }
+    }
+
+    if (planChanges.length > 0) {
+      const planEpisodes = buildPlanUpdateEpisodes({
+        changes: planChanges,
+        happenedAt: new Date(),
+        isDev: isDev(),
+      });
+
+      for (const planEpisode of planEpisodes) {
+        try {
+          await emitMemoryEpisode(planEpisode);
+          logger.info("[tick] built plan_update episode", planEpisode);
+        } catch (error) {
+          logger.error("[tick] write plan_update episode failed", error);
+        }
       }
     }
 
     // 执行行为
-    const executionResult = await actionMetadata.executor(context);
+    const executionResult = await actionMetadata.executor(context, selectedAction);
 
     // 更新世界时间（第一次）
     await context.worldState.updateTime();
 
     // 计算行为持续时间
-    const durationMin = await getDurationTime(
-      actionMetadata.durationMin,
-      context,
-      selectedAction.durationMinute,
-    );
+    const durationMin = await getDurationTime(actionMetadata.durationMin, context, selectedAction);
 
     const behaviorEpisode = buildBehaviorEpisode({
       context,
       selectedAction,
       executionResult: executionResult ?? undefined,
       durationMinutes: durationMin,
-      relatedPlanId: planApplyResult.relatedPlanId,
       happenedAt: new Date(),
       isDev: isDev(),
     });
@@ -148,9 +137,6 @@ export async function tick(params: TickParams): Promise<TickReturn> {
       try {
         await emitMemoryEpisode(behaviorEpisode);
         logger.debug("[tick] built behavior episode", behaviorEpisode);
-        processPendingMemoryEpisodes({ limit: 1, isDev: isDev() }).catch((error) => {
-          logger.error("[tick] process pending memory episodes failed", error);
-        });
       } catch (e) {
         logger.error("[tick] build world_action episode failed", e);
       }
@@ -158,7 +144,7 @@ export async function tick(params: TickParams): Promise<TickReturn> {
 
     const completionEvent =
       typeof actionMetadata.completionEvent === "function"
-        ? await actionMetadata.completionEvent(context)
+        ? await actionMetadata.completionEvent(context, selectedAction)
         : actionMetadata.completionEvent;
 
     logger.info(

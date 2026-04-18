@@ -1,5 +1,4 @@
-import { getCharacterCardPrompt } from "@yuiju/source";
-import { deepseekProvider, getRedis, getYuijuConfig } from "@yuiju/utils";
+import { deepseekProvider, getCharacterCardPrompt, getRedis, getYuijuConfig } from "@yuiju/utils";
 import { convertToModelMessages, stepCountIs, streamText, type UIMessage } from "ai";
 import { isPublicDeployment } from "@/lib/public-deployment";
 
@@ -160,7 +159,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const systemPrompt = getCharacterCardPrompt({ userName });
+  const systemPrompt = getCharacterCardPrompt();
 
   const result = await streamText({
     model: deepseekProvider("deepseek-chat"),

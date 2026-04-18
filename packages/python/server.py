@@ -1,31 +1,22 @@
 import json
 import logging
+import sys
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
 from neo4j import AsyncSession
+from pydantic import BaseModel, Field, field_validator
 
 from graphiti_core.nodes import EpisodeType
 from graphiti_core.search.search_config_recipes import (
     COMBINED_HYBRID_SEARCH_CROSS_ENCODER,
-    COMBINED_HYBRID_SEARCH_RRF,
 )
 from graphiti_core.search.search_filters import SearchFilters
 
 from graphiti_client import close_graphiti, get_graphiti
 
 logger = logging.getLogger("python-server")
-
-# ========================================
-# 临时补丁：修复 Graphiti 字段兼容性问题
-# 问题 1：LLM 返回的是 "entities"，但 Graphiti 期望的是 "extracted_entities"
-# 问题 2：LLM 返回的是 "entity_text"，但 Graphiti 期望的是 "name"
-# ========================================
-import sys
-from pydantic import Field, field_validator
-from typing import Any
 
 # 保存原始类并替换
 _original_extracted_entities = None
@@ -114,9 +105,7 @@ def _apply_field_compatibility_patch():
         import traceback
         logger.warning(traceback.format_exc())
 
-# 应用补丁
 _apply_field_compatibility_patch()
-# ========================================
 
 logging.basicConfig(
   level=logging.INFO,
@@ -124,34 +113,155 @@ logging.basicConfig(
 )
 logging.getLogger("neo4j.notifications").setLevel(logging.WARNING)
 
-SUBJECT_NAME = "ゆいじゅ"
+SELF_CANONICAL_NAME = "ゆいじゅ"
+SELF_NAME_ALIASES = {"悠酱", "悠醬", "yuiju", SELF_CANONICAL_NAME}
+CUSTOM_NODE_LABELS = ("Character", "PreferenceTarget")
+
+# Search 结果的最小可接受分数阈值。
+# 说明：
+# - edge 是显式事实边，语义强，允许更低阈值以保留有效召回；
+# - node_summary 是节点画像兜底，噪声更高，因此阈值更严格；
+# - 这些值先用于清理明显无关结果，后续可基于真实日志继续微调。
+EDGE_RESULT_MIN_SCORE = 0.2
+NODE_SUMMARY_RESULT_MIN_SCORE = 0.15
 
 
-class FactCandidate(BaseModel):
+class Character(BaseModel):
   """
-  业务侧提炼后的候选事实。
+  图谱中的角色实体。
+
+  说明：
+  - 只表示稳定可识别的人物/角色，不包含泛化事件或抽象流程；
+  - 当前主要覆盖悠酱本人以及对话对象等具名角色。
   """
 
-  id: str = Field(min_length=1)
-  dedupeKey: str = Field(min_length=1)
+  character_role: Literal["self", "counterparty", "other"] | None = Field(
+    default=None,
+    description="角色在当前 episode 中的身份：self 为悠酱本人，counterparty 为互动对象，other 为其他角色。",
+  )
+
+
+class PreferenceTarget(BaseModel):
+  """
+  可承载长期偏好的目标实体。
+
+  说明：
+  - 用于表示食物、饮品、地点、活动、媒体等被偏好或回避的对象；
+  - 不用于表示单次事件、计划或流程性动作。
+  """
+
+  target_kind: Literal["food", "drink", "activity", "place", "media", "topic", "other"] | None = (
+    Field(
+      default=None,
+      description="偏好目标的粗粒度类别，例如 food、drink、activity、place、media、topic、other。",
+    )
+  )
+
+
+class PreferenceEdge(BaseModel):
+  """
+  角色到偏好目标的长期偏好关系。
+  """
+
+  predicate: Literal["likes", "dislikes", "prefers", "avoids"] | None = Field(
+    default=None,
+    description="长期偏好关系的谓词，只能是 likes、dislikes、prefers、avoids。",
+  )
+  confidence: float | None = Field(
+    default=None,
+    ge=0,
+    le=1,
+    description="当前关系抽取的置信度，范围为 0 到 1。",
+  )
+  evidence_episode_id: str | None = Field(
+    default=None,
+    description="支撑当前关系的 Mongo memory episode id，应优先复用输入 meta 中的 episode_id。",
+  )
+
+
+class RelationEdge(BaseModel):
+  """
+  角色之间的稳定关系或长期态度。
+  """
+
+  predicate: Literal["trusts", "relies_on", "avoids", "attitude_towards"] | None = Field(
+    default=None,
+    description="人物关系谓词，只能是 trusts、relies_on、avoids、attitude_towards。",
+  )
+  confidence: float | None = Field(
+    default=None,
+    ge=0,
+    le=1,
+    description="当前关系抽取的置信度，范围为 0 到 1。",
+  )
+  evidence_episode_id: str | None = Field(
+    default=None,
+    description="支撑当前关系的 Mongo memory episode id，应优先复用输入 meta 中的 episode_id。",
+  )
+
+
+GRAPHITI_ENTITY_TYPES = {
+  "Character": Character,
+  "PreferenceTarget": PreferenceTarget,
+}
+
+GRAPHITI_EDGE_TYPES = {
+  "PreferenceEdge": PreferenceEdge,
+  "RelationEdge": RelationEdge,
+}
+
+GRAPHITI_EDGE_TYPE_MAP = {
+  ("Character", "PreferenceTarget"): ["PreferenceEdge"],
+  ("Character", "Character"): ["RelationEdge"],
+}
+
+GRAPHITI_EXCLUDED_ENTITY_TYPES = ["Entity"]
+
+GRAPHITI_CUSTOM_EXTRACTION_INSTRUCTIONS = """
+你正在为长期记忆图谱抽取实体和关系，只允许输出以下内容：
+1. Character：稳定可识别的人物或角色，例如ゆいじゅ本人、明确具名的对话对象。
+2. PreferenceTarget：可被长期喜欢/讨厌/偏好/回避的对象，例如食物、饮品、地点、活动、媒体、主题。
+3. PreferenceEdge：Character -> PreferenceTarget 的长期偏好关系。
+4. RelationEdge：Character -> Character 的稳定关系或长期态度。
+
+必须遵守：
+- 主角本人只能使用 `ゆいじゅ` 作为 Character 名称，不要生成 `悠酱` 或其他别名。
+- 如果当前 episode 只描述单次行为、一次性消费、寒暄、天气、计划、金币变化、执行细节，返回空结果。
+- 只有当文本明确体现“稳定偏好”或“稳定关系变化”时，才允许抽取关系。
+- 如果文本明确出现“长期喜欢 / 总会优先选择 / 基本不会改 / 首选 / 最让我安心”这类稳定偏好信号，必须创建 Character -> PreferenceTarget 的 PreferenceEdge，不能只把偏好信息写进 Character summary。
+- 对于“甜品长期最偏爱霜莓千层蛋糕”“饮料总会先选柚香热红茶”这类表达，应该形成 Character -> PreferenceTarget 的偏好边。
+- 不要创建任何泛化实体，不要把事件、计划、流程、时间片当成实体。
+- 如果拿不准是否具有长期价值，宁可不抽取。
+- 如果输入 meta 中提供了 episode_id，请优先把它复制到 PreferenceEdge / RelationEdge 的 evidence_episode_id 字段。
+""".strip()
+
+
+class GraphitiEpisodePayload(BaseModel):
+  """
+  通过 TS 准入判断后的 Episode。
+
+  说明：
+  - TS 侧只负责 shouldWrite 的二值判断；
+  - Python 侧基于该 episode 构造受控文本，并交给 Graphiti 的自定义 ontology 做抽取。
+  """
+
+  id: str | None = None
+  source: str = Field(min_length=1)
   type: str = Field(min_length=1)
   subject: str = Field(min_length=1)
-  predicate: str = Field(min_length=1)
-  object: str = Field(min_length=1)
-  summary: str = Field(min_length=1)
-  confidence: float = Field(ge=0, le=1)
-  evidenceEpisodeId: str = Field(min_length=1)
-  validAt: datetime
-  metadata: dict[str, Any] | None = None
+  counterparty: str | None = None
+  happenedAt: datetime
+  summaryText: str = Field(min_length=1)
+  payload: dict[str, Any] = Field(default_factory=dict)
 
 
-class FactWriteRequest(BaseModel):
+class EpisodeWriteRequest(BaseModel):
   is_dev: bool = Field(default=False)
-  facts: list[FactCandidate] = Field(default_factory=list)
+  episode: GraphitiEpisodePayload
 
 
-class FactWriteResponse(BaseModel):
-  fact_ids: list[str]
+class EpisodeWriteResponse(BaseModel):
+  memory_ids: list[str]
 
 
 class MemorySearchRequest(BaseModel):
@@ -172,8 +282,12 @@ class MemorySearchItem(BaseModel):
   memory: str
   time: str | None = None
   source: str | None = None
-  # Cross Encoder 分数范围 (0-1]，分数越高表示语义相似度越高
+  # 仅当存在可信 rerank 分数时返回。
+  # None 表示当前结果只是保留了候选顺序，没有可用的绝对相关度分数。
   score: float | None = None
+  validFrom: str | None = None
+  validTo: str | None = None
+  metadata: dict[str, Any] | None = None
 
 
 class ClearDevResponse(BaseModel):
@@ -197,70 +311,160 @@ def _namespace_group_id(is_dev: bool) -> str:
   return "dev" if is_dev else "prod"
 
 
-def _stringify_fact_content(
-  fact: FactCandidate,
+def _canonicalize_character_name(name: str | None, *, is_subject: bool = False) -> str | None:
+  """
+  统一图谱中的角色命名。
+
+  说明：
+  - 主角本人始终收敛为 `ゆいじゅ`，避免 `悠酱` / `ゆいじゅ` 混用导致重复节点与召回漂移；
+  - 非主角名称默认保持原样，仅做首尾空白清理。
+  """
+
+  if is_subject:
+    return SELF_CANONICAL_NAME
+
+  normalized = (name or "").strip()
+  if not normalized:
+    return None
+
+  if normalized in SELF_NAME_ALIASES:
+    return SELF_CANONICAL_NAME
+
+  return normalized
+
+
+def _canonicalize_memory_text(text: str) -> str:
+  """
+  统一写入 Graphiti 的文本中的主角别名。
+
+  说明：
+  - 仅将主角别名替换为 `ゆいじゅ`，避免 summaryText 中再次引入重复 self 节点；
+  - 其他人物名称不做重写，保持原始语义。
+  """
+
+  normalized = text
+  for alias in SELF_NAME_ALIASES:
+    if alias == SELF_CANONICAL_NAME:
+      continue
+    normalized = normalized.replace(alias, SELF_CANONICAL_NAME)
+  return normalized
+
+
+def _build_episode_payload_context(episode: GraphitiEpisodePayload) -> dict[str, Any]:
+  """
+  收敛送给 Graphiti 的 episode payload。
+
+  说明：
+  - 输入文本越受控，Graphiti 越不容易把日常流水误抽成实体或关系；
+  - conversation 只保留少量最近消息，behavior 只保留动作级上下文。
+  """
+
+  payload = dict(episode.payload or {})
+
+  if episode.type == "behavior":
+    return {
+      "action": payload.get("action"),
+      "reason": payload.get("reason"),
+      "executionResult": payload.get("executionResult"),
+      "location": payload.get("location"),
+    }
+
+  if episode.type == "conversation":
+    raw_messages = payload.get("messages")
+    recent_messages: list[dict[str, str]] = []
+
+    if isinstance(raw_messages, list):
+      for item in raw_messages[-6:]:
+        if not isinstance(item, dict):
+          continue
+        speaker_name = item.get("speaker_name")
+        content = item.get("content")
+        recent_messages.append(
+          {
+            "speaker_name": _canonicalize_character_name(str(speaker_name or "")) or "",
+            "content": str(content or ""),
+          }
+        )
+
+    return {
+      "counterpartyName": _canonicalize_character_name(str(payload.get("counterpartyName") or "")),
+      "recentMessages": recent_messages,
+    }
+
+  return payload
+
+
+def _stringify_episode_content(
+  episode: GraphitiEpisodePayload,
 ) -> str:
   """
-  将提炼后的 fact 转换为 Graphiti 可检索文本。
+  将准入后的 episode 转换为 Graphiti 可检索文本。
 
   当前约束说明：
-  - 本阶段只做轻量 dedupeKey 透传，不在 Python 服务层引入冲突治理；
-  - 同一 dedupeKey 的冲突 fact 仍按独立 episode 写入，避免过早引入覆盖/并存策略复杂度；
-  - 等后续确实出现治理压力时，再补 fact registry、状态流转和证据链聚合。
+  - 不直接发送完整原始 payload，减少 Graphiti 因噪声而创建泛化实体/关系的概率；
+  - 通过 meta + 结构化上下文，把“谁、在什么场景下、说了什么/做了什么”保留下来；
+  - 长期价值判断已由 TS 侧做过一次保守准入，这里继续强调 preference / relation 两类目标。
   """
 
   meta = {
-    "fact_id": fact.id,
-    "dedupe_key": fact.dedupeKey,
-    "subject_name": fact.subject,
-    "type": fact.type,
-    "predicate": fact.predicate,
-    "object": fact.object,
-    "confidence": fact.confidence,
-    "evidence_episode_id": fact.evidenceEpisodeId,
-    "fact_language_hint": "尽量使用中文表述 fact",
+    "episode_id": episode.id,
+    "episode_type": episode.type,
+    "episode_source": episode.source,
+    "subject_name": _canonicalize_character_name(episode.subject, is_subject=True),
+    "counterparty_name": _canonicalize_character_name(episode.counterparty),
+    "happened_at": episode.happenedAt.astimezone(timezone.utc).isoformat(),
   }
-  if fact.metadata:
-    meta["metadata"] = fact.metadata
 
-  return "[meta]\n" + json.dumps(meta, ensure_ascii=False) + "\n[/meta]\n" + fact.summary
+  content = {
+    "summaryText": _canonicalize_memory_text(episode.summaryText),
+    "payloadContext": _build_episode_payload_context(episode),
+  }
+
+  return "\n".join(
+    [
+      "任务：只抽取稳定偏好与稳定人物关系；没有就返回空结果。",
+      f"主角固定名称：{SELF_CANONICAL_NAME}。不要生成“悠酱”等别名实体。",
+      "稳定偏好必须产出 PreferenceEdge，不能只写进节点 summary。",
+      "[meta]",
+      json.dumps(meta, ensure_ascii=False, separators=(",", ":")),
+      "[/meta]",
+      "[content]",
+      json.dumps(content, ensure_ascii=False, separators=(",", ":")),
+      "[/content]",
+    ]
+  )
 
 
-@app.post("/v1/facts", response_model=FactWriteResponse)
-async def write_facts(payload: FactWriteRequest) -> FactWriteResponse:
+@app.post("/v1/episodes", response_model=EpisodeWriteResponse)
+async def write_episode(payload: EpisodeWriteRequest) -> EpisodeWriteResponse:
   graphiti = await get_graphiti()
-  fact_ids: list[str] = []
+  episode = payload.episode
+  happened_at = episode.happenedAt
 
-  # 当前阶段暂不在 Python 侧做去重/冲突治理。
-  # 设计意图：
-  # - 先保持写入链路简单稳定，避免因为“覆盖 / 并存 / 冲突合并”规则不成熟而引入额外复杂度；
-  # - dedupeKey 先完整写入 Graphiti 元数据，给后续治理留下稳定锚点；
-  # - 如果未来需要治理，优先在这里补 registry / evidence chain，而不是改上游协议。
+  if happened_at.tzinfo is None:
+    happened_at = happened_at.replace(tzinfo=timezone.utc)
 
-  for fact in payload.facts:
-    valid_at = fact.validAt
-    if valid_at.tzinfo is None:
-      valid_at = valid_at.replace(tzinfo=timezone.utc)
+  result = await graphiti.add_episode(
+    name=f"{episode.subject}-{episode.type}-{episode.id or happened_at.isoformat()}",
+    episode_body=_stringify_episode_content(episode),
+    source_description=f"episode:{episode.type}",
+    reference_time=happened_at,
+    source=EpisodeType.text,
+    group_id=_namespace_group_id(payload.is_dev),
+    entity_types=GRAPHITI_ENTITY_TYPES,
+    excluded_entity_types=GRAPHITI_EXCLUDED_ENTITY_TYPES,
+    edge_types=GRAPHITI_EDGE_TYPES,
+    edge_type_map=GRAPHITI_EDGE_TYPE_MAP,
+    custom_extraction_instructions=GRAPHITI_CUSTOM_EXTRACTION_INSTRUCTIONS,
+  )
 
-    await graphiti.add_episode(
-      name=f"{fact.subject}-{fact.type}-{fact.id}",
-      episode_body=_stringify_fact_content(fact),
-      source_description=f"fact:{fact.type}",
-      reference_time=valid_at,
-      source=EpisodeType.text,
-      group_id=_namespace_group_id(payload.is_dev),
-    )
-    fact_ids.append(fact.id)
-
-  return FactWriteResponse(fact_ids=fact_ids)
+  memory_ids = [edge.uuid for edge in result.edges]
+  return EpisodeWriteResponse(memory_ids=memory_ids)
 
 
 @app.post("/v1/search", response_model=list[MemorySearchItem])
 async def search_memory(payload: MemorySearchRequest) -> list[MemorySearchItem]:
   graphiti = await get_graphiti()
-
-  # 当前阶段也不对“同 dedupeKey 的多个结果”做冲突折叠。
-  # 这样可以保证搜索结果忠实反映图中已有事实，等治理策略明确后再统一收敛。
 
   # 优化搜索配置，使用 Cross Encoder 进行深度语义精排
   # Cross Encoder 能够更准确地计算查询与结果之间的语义相似度
@@ -268,20 +472,21 @@ async def search_memory(payload: MemorySearchRequest) -> list[MemorySearchItem]:
   config.limit = payload.top_k
 
   # 召回阶段：降低相似度阈值，确保召回更多相关候选结果
-  config.edge_config.sim_min_score = 0.6
-  config.node_config.sim_min_score = 0.6
-  config.episode_config.sim_min_score = 0.6
-  config.community_config.sim_min_score = 0.6
+  config.edge_config.sim_min_score = 0.3
+  config.node_config.sim_min_score = 0.3
+  config.episode_config.sim_min_score = 0.3
+  config.community_config.sim_min_score = 0.3
 
-  # 精排阶段：提高重排最小分数，保证返回结果的高质量
-  config.reranker_min_score = 0.8
+  # 精排阶段先保持宽松，优先排查“图里有数据但被服务端过滤掉”的问题。
+  config.reranker_min_score = 0.0
 
-  search_filter: SearchFilters | None = None
-  if payload.filters:
-    try:
-      search_filter = SearchFilters.model_validate(payload.filters)
-    except Exception as e:
-      raise HTTPException(status_code=400, detail=f"Invalid filters: {e}") from e
+  filter_payload = dict(payload.filters or {})
+  filter_payload.setdefault("node_labels", list(CUSTOM_NODE_LABELS))
+
+  try:
+    search_filter = SearchFilters.model_validate(filter_payload)
+  except Exception as e:
+    raise HTTPException(status_code=400, detail=f"Invalid filters: {e}") from e
 
   results = await graphiti.search_(
     query=payload.query,
@@ -293,21 +498,47 @@ async def search_memory(payload: MemorySearchRequest) -> list[MemorySearchItem]:
   items: list[MemorySearchItem] = []
   for idx, edge in enumerate(results.edges):
     score = results.edge_reranker_scores[idx] if idx < len(results.edge_reranker_scores) else None
+
+    # edge 是主结果来源，显式事实边只要达到基础相关度就保留。
+    if score is not None and score < EDGE_RESULT_MIN_SCORE:
+      continue
+
     items.append(
       MemorySearchItem(
         memory=edge.fact,
         time=edge.created_at.astimezone(timezone.utc).isoformat() if edge.created_at else None,
         source=edge.name,
         score=score if score is not None else None,
+        validFrom=edge.valid_at.astimezone(timezone.utc).isoformat() if edge.valid_at else None,
+        validTo=edge.invalid_at.astimezone(timezone.utc).isoformat() if edge.invalid_at else None,
+        metadata=edge.attributes if edge.attributes else None,
       )
     )
 
-  # 进一步过滤结果，只保留语义相似度高的记忆
-  # Cross Encoder 分数范围 0-1，分数越高表示语义相似度越高
-  filtered_items = [item for item in items if (item.score or 0) > 0.85]
+  node_items: list[MemorySearchItem] = []
+  for idx, node in enumerate(results.nodes):
+    score = results.node_reranker_scores[idx] if idx < len(results.node_reranker_scores) else None
+    summary = (node.summary or "").strip()
+    if not summary:
+      continue
 
-  # 如果过滤后没有结果，返回空列表（避免返回不相关的结果）
-  return filtered_items
+    # node summary 只作为兜底来源，相关度要求更高，避免把画像噪声混入事实结果。
+    if score is not None and score < NODE_SUMMARY_RESULT_MIN_SCORE:
+      continue
+
+    node_items.append(
+      MemorySearchItem(
+        memory=summary,
+        time=node.created_at.astimezone(timezone.utc).isoformat() if node.created_at else None,
+        source=node.name,
+        score=score if score is not None else None,
+        metadata={
+          "source_type": "node_summary",
+        },
+      )
+    )
+
+  return items + node_items
 
 
 @app.delete("/v1/admin/clear-dev", response_model=ClearDevResponse)

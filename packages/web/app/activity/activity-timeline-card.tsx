@@ -3,8 +3,18 @@
 import dayjs from "dayjs";
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import {
   Select,
   SelectContent,
@@ -13,17 +23,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import type { ActivityItem } from "./activity-data";
+import type { ActivityItem, ActivityPagination } from "./activity-data";
 
 interface ActivityTimelineCardProps {
   events?: ActivityItem[];
+  pagination?: ActivityPagination;
+  isLoading: boolean;
+  errorMessage?: string;
   selectedId?: string | null;
   onSelect?: (id: string) => void;
+  onPageChange: (page: number) => void;
 }
 
 type TimeRangeOption = "today" | "last7" | "all";
 type TriggerFilter = "all" | ActivityItem["trigger"];
 type EpisodeTypeFilter = "all" | ActivityItem["episodeType"];
+
+const DEFAULT_TIME_RANGE: TimeRangeOption = "all";
+const DEFAULT_TRIGGER: TriggerFilter = "all";
+const DEFAULT_EPISODE_TYPE: EpisodeTypeFilter = "all";
 
 /**
  * 动态时间线卡片。
@@ -32,13 +50,41 @@ type EpisodeTypeFilter = "all" | ActivityItem["episodeType"];
  * - 所有筛选都基于 Episode 派生数据进行，不再假设只有行为事件；
  * - 通过 selectedId / onSelect 与右侧详情卡片联动，避免组件内部维护重复状态。
  */
-export function ActivityTimelineCard({ events, selectedId, onSelect }: ActivityTimelineCardProps) {
-  const [timeRange, setTimeRange] = useState<TimeRangeOption>("today");
-  const [trigger, setTrigger] = useState<TriggerFilter>("all");
-  const [episodeType, setEpisodeType] = useState<EpisodeTypeFilter>("all");
+export function ActivityTimelineCard({
+  events,
+  pagination,
+  isLoading,
+  errorMessage,
+  selectedId,
+  onSelect,
+  onPageChange,
+}: ActivityTimelineCardProps) {
+  const [timeRange, setTimeRange] = useState<TimeRangeOption>(DEFAULT_TIME_RANGE);
+  const [trigger, setTrigger] = useState<TriggerFilter>(DEFAULT_TRIGGER);
+  const [episodeType, setEpisodeType] = useState<EpisodeTypeFilter>(DEFAULT_EPISODE_TYPE);
+  const [keywordInput, setKeywordInput] = useState("");
   const [keyword, setKeyword] = useState("");
 
   const displayEvents = useMemo(() => (events && events.length > 0 ? events : []), [events]);
+
+  const applyKeywordSearch = () => {
+    setKeyword(keywordInput.trim());
+  };
+
+  const resetFilters = () => {
+    setTimeRange(DEFAULT_TIME_RANGE);
+    setTrigger(DEFAULT_TRIGGER);
+    setEpisodeType(DEFAULT_EPISODE_TYPE);
+    setKeywordInput("");
+    setKeyword("");
+  };
+
+  const hasActiveFilters =
+    timeRange !== DEFAULT_TIME_RANGE ||
+    trigger !== DEFAULT_TRIGGER ||
+    episodeType !== DEFAULT_EPISODE_TYPE ||
+    keywordInput.trim().length > 0 ||
+    keyword.length > 0;
 
   const filteredEvents = useMemo(() => {
     let next = displayEvents;
@@ -75,6 +121,10 @@ export function ActivityTimelineCard({ events, selectedId, onSelect }: ActivityT
 
     return next;
   }, [displayEvents, episodeType, keyword, timeRange, trigger]);
+
+  const currentPage = pagination?.page ?? 1;
+  const totalPages = pagination?.totalPages ?? 1;
+  const pageItems = buildVisiblePageItems(currentPage, totalPages);
 
   return (
     <Card>
@@ -149,7 +199,6 @@ export function ActivityTimelineCard({ events, selectedId, onSelect }: ActivityT
                 <SelectItem value="plan_updated">plan_updated</SelectItem>
                 <SelectItem value="plan_completed">plan_completed</SelectItem>
                 <SelectItem value="plan_abandoned">plan_abandoned</SelectItem>
-                <SelectItem value="plan_superseded">plan_superseded</SelectItem>
                 <SelectItem value="system">system</SelectItem>
               </SelectContent>
             </Select>
@@ -162,14 +211,43 @@ export function ActivityTimelineCard({ events, selectedId, onSelect }: ActivityT
             <Input
               id="keyword"
               placeholder="输入标题、摘要或详情字段"
-              value={keyword}
-              onChange={(event) => setKeyword(event.target.value)}
+              value={keywordInput}
+              onChange={(event) => setKeywordInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  applyKeywordSearch();
+                }
+              }}
             />
           </div>
         </div>
 
+        <div className="flex items-center gap-2 max-[520px]:flex-col max-[520px]:items-stretch">
+          <Button type="button" size="sm" onClick={applyKeywordSearch}>
+            搜索
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={!hasActiveFilters}
+            onClick={resetFilters}
+          >
+            重置
+          </Button>
+        </div>
+
         <div className="relative pl-[18px] grid gap-3 before:content-[''] before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-[rgba(145,196,238,0.6)] before:rounded-full">
-          {filteredEvents.length === 0 ? (
+          {errorMessage ? (
+            <div className="rounded-2xl border border-[rgba(240,180,180,0.85)] bg-[rgba(255,246,246,0.9)] p-3 text-[13px] text-[#8b4a4a]">
+              {errorMessage}
+            </div>
+          ) : isLoading && displayEvents.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-[rgba(217,230,245,0.9)] bg-[rgba(247,251,255,0.78)] p-3 text-[13px] text-[#6b7480]">
+              正在加载动态...
+            </div>
+          ) : filteredEvents.length === 0 ? (
             <div className="rounded-2xl border border-[rgba(217,230,245,0.9)] bg-[rgba(255,255,255,0.84)] shadow-[0_10px_25px_rgba(21,33,54,0.06)] p-3 text-[13px] text-[#6b7480]">
               没有匹配的记录，试试调整筛选条件。
             </div>
@@ -218,14 +296,112 @@ export function ActivityTimelineCard({ events, selectedId, onSelect }: ActivityT
 
                   <div className="flex items-center justify-between gap-3 text-[12px] text-[#6b7480]">
                     <span>{item.dateLabel}</span>
-                    <span>{item.extractionStatus}</span>
                   </div>
                 </button>
               );
             })
           )}
         </div>
+
+        <div className="flex items-center justify-between gap-3 border-t border-[rgba(217,230,245,0.85)] pt-3 max-[640px]:flex-col max-[640px]:items-stretch">
+          <div className="text-[13px] text-[#6b7480]">
+            第 {currentPage} / {totalPages} 页{pagination ? ` · 共 ${pagination.total} 条` : ""}
+          </div>
+
+          <Pagination className="mx-0 w-auto justify-end max-[640px]:justify-center">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  href="#"
+                  className={cn(
+                    !pagination?.hasPrevPage || isLoading
+                      ? "pointer-events-none opacity-50"
+                      : "cursor-pointer",
+                  )}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    if (!pagination?.hasPrevPage || isLoading) return;
+                    onPageChange(currentPage - 1);
+                  }}
+                />
+              </PaginationItem>
+
+              {pageItems.map((item) =>
+                item === "ellipsis-left" || item === "ellipsis-right" ? (
+                  <PaginationItem key={item}>
+                    <PaginationEllipsis />
+                  </PaginationItem>
+                ) : (
+                  <PaginationItem key={item}>
+                    <PaginationLink
+                      href="#"
+                      isActive={item === currentPage}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        if (item === currentPage || isLoading) return;
+                        onPageChange(item);
+                      }}
+                    >
+                      {item}
+                    </PaginationLink>
+                  </PaginationItem>
+                ),
+              )}
+
+              <PaginationItem>
+                <PaginationNext
+                  href="#"
+                  className={cn(
+                    !pagination?.hasNextPage || isLoading
+                      ? "pointer-events-none opacity-50"
+                      : "cursor-pointer",
+                  )}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    if (!pagination?.hasNextPage || isLoading) return;
+                    onPageChange(currentPage + 1);
+                  }}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
       </div>
     </Card>
   );
+}
+
+function buildVisiblePageItems(
+  currentPage: number,
+  totalPages: number,
+): Array<number | "ellipsis-left" | "ellipsis-right"> {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  if (currentPage <= 4) {
+    return [1, 2, 3, 4, 5, "ellipsis-right", totalPages];
+  }
+
+  if (currentPage >= totalPages - 3) {
+    return [
+      1,
+      "ellipsis-left",
+      totalPages - 4,
+      totalPages - 3,
+      totalPages - 2,
+      totalPages - 1,
+      totalPages,
+    ];
+  }
+
+  return [
+    1,
+    "ellipsis-left",
+    currentPage - 1,
+    currentPage,
+    currentPage + 1,
+    "ellipsis-right",
+    totalPages,
+  ];
 }

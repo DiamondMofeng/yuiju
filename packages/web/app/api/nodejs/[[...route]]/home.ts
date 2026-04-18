@@ -19,7 +19,38 @@ export interface HomeResponse {
     todayActions?: string[];
     inventory?: { name: string; count: number }[];
     plans?: { longTerm?: string; shortTerm?: string[] };
-    world?: { time?: string };
+    world?: {
+      time?: string;
+      weather?: {
+        type?: string;
+        temperatureLevel?: string;
+        periodStartAt?: string;
+        periodEndAt?: string;
+        updatedAt?: string;
+      };
+    };
+  };
+}
+
+/**
+ * 构建首页接口使用的世界状态响应。
+ *
+ * 说明：
+ * - 将 Redis/领域层的 WorldStateData 收敛为前端稳定消费的序列化结构；
+ * - 单独抽成纯函数，便于后续为 Web 聚合层补测试。
+ */
+export function buildHomeWorldPayload(world: Awaited<ReturnType<typeof initWorldStateData>>) {
+  return {
+    time: world.time.format("YYYY-MM-DD HH:mm"),
+    weather: world.weather
+      ? {
+          type: world.weather.type,
+          temperatureLevel: world.weather.temperatureLevel,
+          periodStartAt: world.weather.periodStartAt,
+          periodEndAt: world.weather.periodEndAt,
+          updatedAt: world.weather.updatedAt,
+        }
+      : undefined,
   };
 }
 
@@ -51,12 +82,10 @@ homeRoute.get("/summary", async (context) => {
       todayActions: state.dailyActionsDoneToday,
       inventory,
       plans: {
-        longTerm: planState.mainPlan?.title,
-        shortTerm: planState.activePlans.map((plan) => plan.title),
+        longTerm: planState.longTermPlan?.title,
+        shortTerm: planState.shortTermPlans.map((plan) => plan.title),
       },
-      world: {
-        time: world.time.format("YYYY-MM-DD HH:mm"),
-      },
+      world: buildHomeWorldPayload(world),
     },
     message: "ok",
   });

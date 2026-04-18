@@ -1,11 +1,12 @@
-import { buildDiarySystemPrompt } from "@yuiju/source";
 import {
+  buildDiarySystemPrompt,
   DEFAULT_DIARY_SUBJECT,
-  DEFAULT_MEMORY_SUBJECT_ID,
-  deepseekProvider,
   getRecentMemoryEpisodes,
   type IMemoryEpisode,
   minimaxModel,
+  NICKNAME,
+  SUBJECT_NAME,
+  strongModel,
   upsertMemoryDiary,
 } from "@yuiju/utils";
 import { generateText } from "ai";
@@ -16,6 +17,7 @@ const MAX_EPISODES_PER_DAY = 500;
 const SLEEP_DIARY_ROLLOVER_HOUR = 6;
 const RAW_CONVERSATION_CHAR_BUDGET = 50_000;
 const CONVERSATION_EPISODES_PER_CHUNK = 30;
+const SUBJECT_DISPLAY_NAME = `${SUBJECT_NAME}（${NICKNAME}）`;
 
 interface ConversationMessage {
   speaker_name: string;
@@ -69,7 +71,7 @@ function buildRawConversationMaterial(episode: IMemoryEpisode): DiaryMaterialIte
     type: "conversation",
     happenedAt: dayjs(episode.happenedAt).toISOString(),
     content: [
-      `对话对象：${payload.counterpartyName ?? episode.counterparty ?? "未知对象"}`,
+      `对话对象：${payload.counterpartyName ?? "未知对象"}`,
       `窗口摘要：${episode.summaryText}`,
       messages ? `消息记录：\n${messages}` : undefined,
     ]
@@ -79,17 +81,12 @@ function buildRawConversationMaterial(episode: IMemoryEpisode): DiaryMaterialIte
 }
 
 function buildConversationEpisodePrompt(episode: IMemoryEpisode): string {
-  const payload = getConversationPayload(episode);
   const messages = getConversationMessages(episode)
     .map((message) => `${message.timestamp} ${message.speaker_name}：${message.content}`)
     .join("\n");
 
-  return [
-    `对话对象：${payload.counterpartyName ?? episode.counterparty ?? "未知对象"}`,
-    `窗口摘要：${episode.summaryText}`,
-    messages ? `消息记录：\n${messages}` : undefined,
-  ]
-    .filter((item): item is string => Boolean(item))
+  return [`窗口摘要：${episode.summaryText}`, messages ? `消息记录：\n${messages}` : undefined]
+    .filter(Boolean)
     .join("\n");
 }
 
@@ -121,15 +118,18 @@ async function summarizeConversationEpisodes(input: {
   episodes: IMemoryEpisode[];
 }): Promise<DiaryMaterialItem> {
   const result = await generateText({
-    model: deepseekProvider("deepseek-chat"),
+    model: minimaxModel,
     prompt: [
       "你是日记生成前的聊天素材压缩器。",
       "请把下面这一组聊天窗口压成一小段自然语言摘要，供后续写日记使用。",
       "目标是帮助模型写出日记，不是做精确信息抽取。",
-      "只需要概括这一组聊天大概聊了什么、整体氛围怎样、有哪些悠酱可能会记住的小片段。",
+      `这里的主角是${SUBJECT_DISPLAY_NAME}，两种叫法都指同一个人。`,
+      `只总结与${SUBJECT_DISPLAY_NAME}实际参与的聊天片段，概括这些片段大概聊了什么、整体氛围怎样、有哪些${SUBJECT_DISPLAY_NAME}可能会记住的小片段。`,
+      `这里的“参与”指：${SUBJECT_DISPLAY_NAME}自己发言了，或别人明确在对${SUBJECT_DISPLAY_NAME}说话、问${SUBJECT_DISPLAY_NAME}、回应${SUBJECT_DISPLAY_NAME}。只要材料里出现的是这两个名字中的任意一个，都按同一个人理解。`,
+      `如果只是其他人之间的闲聊、群里的旁支话题，而${SUBJECT_DISPLAY_NAME}没有实际参与，就不要写进摘要。不要因为它被归档在聊天窗口里，就默认整段都算${SUBJECT_DISPLAY_NAME}参与。`,
+      `如果这一组窗口里基本没有${SUBJECT_DISPLAY_NAME}参与，只输出一句简短自然的话：这段时间群里有聊天，但${SUBJECT_DISPLAY_NAME}没有实际参与。`,
       "不要输出条目列表，不要硬拆对象/话题/情绪字段，不要编造材料里没有的内容。",
-      `分组标识：第 ${input.chunkIndex + 1} 组，共 ${input.chunkCount} 组`,
-      `聊天窗口数量：${input.episodes.length}`,
+      `下面是多个彼此独立的聊天窗口，请只关注${SUBJECT_DISPLAY_NAME}实际参与的部分，再合并成一段摘要。`,
       `聊天材料：\n${input.episodes
         .map((episode, index) => `## 窗口 ${index + 1}\n${buildConversationEpisodePrompt(episode)}`)
         .join("\n\n")}`,
@@ -151,7 +151,7 @@ async function writeDiaryText(input: {
   materials: DiaryMaterialItem[];
 }): Promise<string> {
   const result = await generateText({
-    model: minimaxModel,
+    model: strongModel,
     system: buildDiarySystemPrompt({
       subject: input.subject,
       diaryDate: input.diaryDate,
@@ -164,8 +164,6 @@ async function writeDiaryText(input: {
           happenedAt: item.happenedAt,
           content: item.content,
         })),
-        null,
-        2,
       ),
     ].join("\n"),
   });
@@ -262,7 +260,7 @@ export async function generateDiaryForDate(input: GenerateDiaryForDateInput): Pr
   const subject = input.subject ?? DEFAULT_DIARY_SUBJECT;
   const episodes = await loadEpisodesForDiary({
     diaryDate: input.diaryDate,
-    subject: DEFAULT_MEMORY_SUBJECT_ID,
+    subject: SUBJECT_NAME,
     isDev: input.isDev,
   });
 

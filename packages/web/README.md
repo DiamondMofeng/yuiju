@@ -39,13 +39,13 @@ public/                      # 静态资源
 
 ```bash
 # 开发模式
-pnpm dev:web
+pnpm run dev:web
 
 # 生产构建
-pnpm build:web
+pnpm run build:web
 
 # 生产启动
-pnpm start:web
+pnpm run start:web
 ```
 
 ## 访问方式
@@ -55,6 +55,7 @@ pnpm start:web
 
 ## 注意事项
 
-- `api/nodejs` 会在启动时尝试初始化 MongoDB 连接，若 `MONGO_URI` 未配置，部分接口会返回不可用状态。
+- `web` 运行依赖根目录的 `yuiju.config.ts`；若还未创建，可先执行 `cp yuiju.config.ts.example yuiju.config.ts`。
+- `api/nodejs` 会在启动时尝试初始化 MongoDB 连接，若 `yuiju.config.ts` 中的 `database.mongoUri` 未配置，部分接口会返回不可用状态。
 - 前端首页当前通过 `SWR` 请求 `/api/nodejs/home` 相关接口，因此建议 `world` 与 `web` 一起联调。
 - 若构建环境无法访问外网，`next/font/google` 相关字体下载可能导致 `build` 失败，需要改成本地字体或可访问网络环境。

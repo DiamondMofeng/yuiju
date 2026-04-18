@@ -1,21 +1,15 @@
 import type {
+  AgentPlanChange,
   PlanApplyResult,
   PlanChange,
   PlanItem,
-  PlanProposal,
   PlanScope,
-  PlanSource,
   PlanState,
 } from "@yuiju/utils";
 import { initPlanStateData, savePlanStateData } from "@yuiju/utils";
 
-function normalizePlanTitle(title?: string): string | undefined {
-  const normalized = title?.trim();
-  return normalized ? normalized : undefined;
-}
-
-function createStablePlanId(scope: PlanScope, title: string): string {
-  const raw = `${scope}:${title}`;
+function createStablePlanId(scope: PlanScope, plan: string): string {
+  const raw = `${scope}:${plan}`;
   let hash = 0;
   for (let index = 0; index < raw.length; index += 1) {
     hash = (hash * 31 + raw.charCodeAt(index)) >>> 0;
@@ -23,91 +17,14 @@ function createStablePlanId(scope: PlanScope, title: string): string {
   return `plan_${hash.toString(16)}`;
 }
 
-function createPlanItem(input: {
-  scope: PlanScope;
-  title: string;
-  nowIso: string;
-  parentPlanId?: string;
-  reason?: string;
-  source?: PlanSource;
-  expiresAt?: string;
-}): PlanItem {
-  return {
-    id: createStablePlanId(input.scope, input.title),
-    title: input.title,
-    scope: input.scope,
-    status: "active",
-    parentPlanId: input.parentPlanId,
-    reason: input.reason,
-    source: input.source ?? "llm",
-    expiresAt: input.expiresAt,
-    createdAt: input.nowIso,
-    updatedAt: input.nowIso,
-  };
-}
-
 function clonePlanState(state: PlanState): PlanState {
   return {
-    mainPlanId: state.mainPlanId,
-    activePlanIds: [...state.activePlanIds],
-    mainPlan: state.mainPlan ? { ...state.mainPlan } : undefined,
-    activePlans: state.activePlans.map((plan) => ({ ...plan })),
+    longTermPlan: state.longTermPlan ? { ...state.longTermPlan } : undefined,
+    shortTermPlans: state.shortTermPlans.map((plan) => ({ ...plan })),
     updatedAt: state.updatedAt,
   };
 }
 
-function clonePlanItem(plan?: PlanItem): PlanItem | undefined {
-  return plan ? { ...plan } : undefined;
-}
-
-function hasMeaningfulPlanChanges(input: { previous?: PlanItem; next: PlanItem }): boolean {
-  const previous = input.previous;
-  if (!previous) {
-    return true;
-  }
-
-  return (
-    previous.title !== input.next.title ||
-    previous.parentPlanId !== input.next.parentPlanId ||
-    previous.reason !== input.next.reason ||
-    previous.source !== input.next.source ||
-    previous.expiresAt !== input.next.expiresAt
-  );
-}
-
-function markPlanTerminal(
-  plan: PlanItem,
-  status: "completed" | "abandoned" | "superseded",
-  nowIso: string,
-): PlanItem {
-  return {
-    ...plan,
-    status,
-    updatedAt: nowIso,
-  };
-}
-
-function rebuildPlanReferences(state: PlanState): void {
-  state.mainPlanId = state.mainPlan?.id;
-  state.activePlanIds = state.activePlans.map((plan) => plan.id);
-}
-
-function createApplyResult(state: PlanState, changes: PlanChange[]): PlanApplyResult {
-  return {
-    state,
-    changes,
-    relatedPlanId: state.activePlanIds[0] ?? state.mainPlanId,
-  };
-}
-
-/**
- * 计划状态管理器。
- *
- * 说明：
- * - 计划状态以 Redis `plan_state` 为唯一真相源；
- * - 显式维护 mainPlanId / activePlanIds 引用层，避免后续只靠对象嵌套推导当前活跃计划；
- * - proposal 中未显式提供的字段视为“不更新”，从而把计划变更改为按条件触发。
- */
 export class PlanManager {
   private static instance: PlanManager | null = null;
 
@@ -122,332 +39,200 @@ export class PlanManager {
     return await initPlanStateData();
   }
 
-  /**
-   * 显式完成计划。
-   *
-   * 说明：
-   * - completed 只负责声明“该计划已经完成”，并将其从 Redis 运行态中移除；
-   * - 关联中的活跃计划不会被强制终止，但会同步更新 parentPlanId，避免悬挂引用。
-   */
-  async completePlan(planId: string): Promise<PlanApplyResult> {
-    return await this.transitionPlanToTerminal({
-      planId,
-      status: "completed",
-    });
+  async previewPlanChanges(
+    planChanges: AgentPlanChange[],
+    currentState?: PlanState,
+  ): Promise<PlanApplyResult> {
+    return this.resolvePlanChanges(planChanges, currentState ?? (await this.getState()));
   }
 
   /**
-   * 显式放弃计划。
-   */
-  async abandonPlan(planId: string): Promise<PlanApplyResult> {
-    return await this.transitionPlanToTerminal({
-      planId,
-      status: "abandoned",
-    });
-  }
-
-  /**
-   * 清理当前运行态中可能残留的终态计划。
+   * 按 agent 最终确认的 planChanges 一次性更新计划状态。
    *
    * 说明：
-   * - 历史终态应只通过 Episode 回溯，不继续停留在 Redis plan_state；
-   * - 该方法可作为补偿清理入口，避免旧数据或异常写入导致状态膨胀。
+   * - 所有变更先作用在克隆态上，任一校验失败都会中断整次提交；
+   * - longTerm 只能有一个计划，shortTerm 保持有序列表；
+   * - updated 表示“同一位置上的计划内容被改写”，直接记录为一次更新。
    */
-  async cleanupTerminalPlans(): Promise<PlanApplyResult> {
-    const currentState = clonePlanState(await this.getState());
-    const nowIso = new Date().toISOString();
-    const changes: PlanChange[] = [];
+  async applyPlanChanges(planChanges: AgentPlanChange[]): Promise<PlanApplyResult> {
+    const currentState = await this.getState();
+    const result = await this.resolvePlanChanges(planChanges, currentState);
 
-    if (currentState.mainPlan && currentState.mainPlan.status !== "active") {
-      changes.push({
-        planId: currentState.mainPlan.id,
-        scope: "main",
-        changeType: currentState.mainPlan.status,
-        before: clonePlanItem(currentState.mainPlan),
-        after: clonePlanItem(currentState.mainPlan),
-      });
-      currentState.mainPlan = undefined;
-      currentState.mainPlanId = undefined;
+    if (result.changes.length === 0) {
+      return result;
     }
 
-    const activePlans = currentState.activePlans.filter((plan) => {
-      if (plan.status === "active") {
-        return true;
-      }
-
-      changes.push({
-        planId: plan.id,
-        scope: "active",
-        changeType: plan.status,
-        before: clonePlanItem(plan),
-        after: clonePlanItem(plan),
-      });
-      return false;
-    });
-
-    currentState.activePlans = activePlans;
-    rebuildPlanReferences(currentState);
-    this.syncActivePlanParentReferences(currentState, changes, nowIso);
-    currentState.updatedAt = nowIso;
-
-    await savePlanStateData(currentState);
-    return createApplyResult(currentState, changes);
+    await savePlanStateData(result.nextState);
+    return {
+      changes: result.changes,
+    };
   }
 
-  /**
-   * 应用计划建议，返回计划变更结果。
-   *
-   */
-  async applyProposal(proposal: PlanProposal): Promise<PlanApplyResult> {
-    const currentState = clonePlanState(await this.getState());
+  private async resolvePlanChanges(
+    planChanges: AgentPlanChange[],
+    currentState: PlanState,
+  ): Promise<PlanApplyResult & { nextState: PlanState }> {
+    if (planChanges.length === 0) {
+      return {
+        changes: [],
+        nextState: clonePlanState(currentState),
+      };
+    }
+
+    const nextState = clonePlanState(currentState);
     const nowIso = new Date().toISOString();
     const changes: PlanChange[] = [];
-    const defaultSource = proposal.source ?? "llm";
-    const mainPlanExplicitlyProvided = Object.hasOwn(proposal, "mainPlanTitle");
-    const activePlansExplicitlyProvided = Object.hasOwn(proposal, "activePlanTitles");
 
-    const previousMainPlan = clonePlanItem(currentState.mainPlan);
+    for (const planChange of planChanges) {
+      if (planChange.changeType === "created") {
+        if (planChange.currentPlan || !planChange.nextPlan) {
+          throw new Error(`非法 created 计划变更: ${JSON.stringify(planChange)}`);
+        }
 
-    if (mainPlanExplicitlyProvided) {
-      const nextMainTitle = normalizePlanTitle(proposal.mainPlanTitle);
+        const nextPlan: PlanItem = {
+          id: createStablePlanId(planChange.scope, planChange.nextPlan),
+          title: planChange.nextPlan,
+          scope: planChange.scope,
+          reason: planChange.reason,
+          source: "llm",
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        };
 
-      if (!nextMainTitle && previousMainPlan) {
-        changes.push({
-          planId: previousMainPlan.id,
-          scope: "main",
-          changeType: "abandoned",
-          before: previousMainPlan,
-          after: markPlanTerminal(previousMainPlan, "abandoned", nowIso),
-        });
-        currentState.mainPlan = undefined;
-        currentState.mainPlanId = undefined;
-      } else if (nextMainTitle) {
-        if (!previousMainPlan) {
-          currentState.mainPlan = createPlanItem({
-            scope: "main",
-            title: nextMainTitle,
-            nowIso,
-            reason: proposal.reason,
-            source: defaultSource,
-            expiresAt: proposal.expiresAt,
-          });
-          currentState.mainPlanId = currentState.mainPlan.id;
-          changes.push({
-            planId: currentState.mainPlan.id,
-            scope: "main",
-            changeType: "created",
-            after: clonePlanItem(currentState.mainPlan),
-          });
-        } else if (previousMainPlan.title !== nextMainTitle) {
-          const nextMainPlan = createPlanItem({
-            scope: "main",
-            title: nextMainTitle,
-            nowIso,
-            reason: proposal.reason,
-            source: defaultSource,
-            expiresAt: proposal.expiresAt,
-          });
-          changes.push({
-            planId: previousMainPlan.id,
-            scope: "main",
-            changeType: "superseded",
-            before: previousMainPlan,
-            after: markPlanTerminal(previousMainPlan, "superseded", nowIso),
-          });
-          currentState.mainPlan = nextMainPlan;
-          currentState.mainPlanId = nextMainPlan.id;
-          changes.push({
-            planId: nextMainPlan.id,
-            scope: "main",
-            changeType: "created",
-            after: clonePlanItem(nextMainPlan),
-          });
+        if (planChange.scope === "longTerm") {
+          if (nextState.longTermPlan) {
+            throw new Error(`长期计划已存在，无法 created: ${planChange.nextPlan}`);
+          }
+
+          nextState.longTermPlan = nextPlan;
         } else {
-          const updatedMainPlan: PlanItem = {
-            ...previousMainPlan,
-            parentPlanId: undefined,
-            reason: proposal.reason ?? previousMainPlan.reason,
-            source: defaultSource,
-            expiresAt: proposal.expiresAt ?? previousMainPlan.expiresAt,
+          if (nextState.shortTermPlans.some((item) => item.title === planChange.nextPlan)) {
+            throw new Error(`短期计划已存在，无法 created: ${planChange.nextPlan}`);
+          }
+
+          nextState.shortTermPlans.push(nextPlan);
+        }
+
+        changes.push({
+          planId: nextPlan.id,
+          scope: planChange.scope,
+          changeType: "created",
+          after: { ...nextPlan },
+        });
+        continue;
+      }
+
+      if (planChange.changeType === "updated") {
+        if (
+          !planChange.currentPlan ||
+          !planChange.nextPlan ||
+          planChange.currentPlan === planChange.nextPlan
+        ) {
+          throw new Error(`非法 updated 计划变更: ${JSON.stringify(planChange)}`);
+        }
+
+        if (planChange.scope === "longTerm") {
+          const currentPlan = nextState.longTermPlan;
+          if (!currentPlan || currentPlan.title !== planChange.currentPlan) {
+            throw new Error(`长期计划不存在，无法 updated: ${planChange.currentPlan}`);
+          }
+
+          const nextPlan: PlanItem = {
+            ...currentPlan,
+            id: createStablePlanId("longTerm", planChange.nextPlan),
+            title: planChange.nextPlan,
+            reason: planChange.reason,
+            source: "llm",
             updatedAt: nowIso,
           };
 
-          if (hasMeaningfulPlanChanges({ previous: previousMainPlan, next: updatedMainPlan })) {
-            currentState.mainPlan = updatedMainPlan;
-            currentState.mainPlanId = updatedMainPlan.id;
-            changes.push({
-              planId: updatedMainPlan.id,
-              scope: "main",
-              changeType: "updated",
-              before: previousMainPlan,
-              after: clonePlanItem(updatedMainPlan),
-            });
-          }
-        }
-      }
-    }
-
-    if (activePlansExplicitlyProvided) {
-      const nextActiveTitles = (proposal.activePlanTitles ?? [])
-        .map((title) => normalizePlanTitle(title))
-        .filter((title): title is string => Boolean(title));
-
-      const previousActivePlans = currentState.activePlans.map((plan) => ({ ...plan }));
-      const previousByTitle = new Map(previousActivePlans.map((plan) => [plan.title, plan]));
-      const nextActivePlans: PlanItem[] = [];
-      const parentPlanId = currentState.mainPlanId;
-
-      for (const title of nextActiveTitles) {
-        const existing = previousByTitle.get(title);
-        const nextPlan = existing
-          ? {
-              ...existing,
-              status: "active" as const,
-              parentPlanId,
-              reason: proposal.reason ?? existing.reason,
-              source: defaultSource,
-              expiresAt: proposal.expiresAt ?? existing.expiresAt,
-              updatedAt: nowIso,
-            }
-          : createPlanItem({
-              scope: "active",
-              title,
-              nowIso,
-              parentPlanId,
-              reason: proposal.reason,
-              source: defaultSource,
-              expiresAt: proposal.expiresAt,
-            });
-
-        nextActivePlans.push(nextPlan);
-
-        if (!existing) {
+          nextState.longTermPlan = nextPlan;
           changes.push({
             planId: nextPlan.id,
-            scope: "active",
-            changeType: "created",
-            after: clonePlanItem(nextPlan),
-          });
-        } else if (hasMeaningfulPlanChanges({ previous: existing, next: nextPlan })) {
-          changes.push({
-            planId: nextPlan.id,
-            scope: "active",
+            scope: "longTerm",
             changeType: "updated",
-            before: existing,
-            after: clonePlanItem(nextPlan),
+            before: { ...currentPlan },
+            after: { ...nextPlan },
           });
+          continue;
         }
-      }
 
-      for (const previous of previousActivePlans) {
-        if (!nextActiveTitles.includes(previous.title)) {
-          changes.push({
-            planId: previous.id,
-            scope: "active",
-            changeType: "abandoned",
-            before: previous,
-            after: markPlanTerminal(previous, "abandoned", nowIso),
-          });
+        const planIndex = nextState.shortTermPlans.findIndex(
+          (item) => item.title === planChange.currentPlan,
+        );
+        if (planIndex < 0) {
+          throw new Error(`短期计划不存在，无法 updated: ${planChange.currentPlan}`);
         }
-      }
 
-      currentState.activePlans = nextActivePlans;
-      rebuildPlanReferences(currentState);
-    }
+        const duplicatedPlan = nextState.shortTermPlans.find(
+          (item, index) => index !== planIndex && item.title === planChange.nextPlan,
+        );
+        if (duplicatedPlan) {
+          throw new Error(`短期计划已存在，无法 updated 为: ${planChange.nextPlan}`);
+        }
 
-    this.syncActivePlanParentReferences(currentState, changes, nowIso);
-    currentState.updatedAt = nowIso;
-    rebuildPlanReferences(currentState);
+        const currentPlan = nextState.shortTermPlans[planIndex];
+        const nextPlan: PlanItem = {
+          ...currentPlan,
+          id: createStablePlanId("shortTerm", planChange.nextPlan),
+          title: planChange.nextPlan,
+          reason: planChange.reason,
+          source: "llm",
+          updatedAt: nowIso,
+        };
 
-    await savePlanStateData(currentState);
-
-    return createApplyResult(currentState, changes);
-  }
-
-  private async transitionPlanToTerminal(input: {
-    planId: string;
-    status: "completed" | "abandoned";
-  }): Promise<PlanApplyResult> {
-    const currentState = clonePlanState(await this.getState());
-    const nowIso = new Date().toISOString();
-    const changes: PlanChange[] = [];
-
-    if (currentState.mainPlan?.id === input.planId) {
-      const before = clonePlanItem(currentState.mainPlan);
-      const after = before ? markPlanTerminal(before, input.status, nowIso) : undefined;
-      if (before && after) {
+        nextState.shortTermPlans.splice(planIndex, 1, nextPlan);
         changes.push({
-          planId: before.id,
-          scope: "main",
-          changeType: input.status,
-          before,
-          after,
-        });
-      }
-      currentState.mainPlan = undefined;
-      currentState.mainPlanId = undefined;
-    } else {
-      const index = currentState.activePlans.findIndex((plan) => plan.id === input.planId);
-      if (index >= 0) {
-        const before = clonePlanItem(currentState.activePlans[index]);
-        const after = before ? markPlanTerminal(before, input.status, nowIso) : undefined;
-        if (before && after) {
-          changes.push({
-            planId: before.id,
-            scope: "active",
-            changeType: input.status,
-            before,
-            after,
-          });
-        }
-        currentState.activePlans.splice(index, 1);
-      }
-    }
-
-    this.syncActivePlanParentReferences(currentState, changes, nowIso);
-    rebuildPlanReferences(currentState);
-    currentState.updatedAt = nowIso;
-
-    await savePlanStateData(currentState);
-    return createApplyResult(currentState, changes);
-  }
-
-  /**
-   * 维护活跃计划与主计划之间的引用一致性。
-   *
-   * 说明：
-   * - 当主计划被创建、替换、完成或清空后，活跃计划的 parentPlanId 也需要同步；
-   * - 只有引用真实发生变化时才产出 updated 事件，避免制造低质量噪音。
-   */
-  private syncActivePlanParentReferences(
-    state: PlanState,
-    changes: PlanChange[],
-    nowIso: string,
-  ): void {
-    state.activePlans = state.activePlans.map((plan) => {
-      const expectedParentPlanId = state.mainPlanId;
-      if (plan.parentPlanId === expectedParentPlanId) {
-        return plan;
-      }
-
-      const nextPlan: PlanItem = {
-        ...plan,
-        parentPlanId: expectedParentPlanId,
-        updatedAt: nowIso,
-      };
-
-      if (hasMeaningfulPlanChanges({ previous: plan, next: nextPlan })) {
-        changes.push({
-          planId: plan.id,
-          scope: "active",
+          planId: nextPlan.id,
+          scope: "shortTerm",
           changeType: "updated",
-          before: clonePlanItem(plan),
-          after: clonePlanItem(nextPlan),
+          before: { ...currentPlan },
+          after: { ...nextPlan },
         });
+        continue;
       }
 
-      return nextPlan;
-    });
+      if (!planChange.currentPlan || planChange.nextPlan) {
+        throw new Error(`非法 ${planChange.changeType} 计划变更: ${JSON.stringify(planChange)}`);
+      }
+
+      if (planChange.scope === "longTerm") {
+        const currentPlan = nextState.longTermPlan;
+        if (!currentPlan || currentPlan.title !== planChange.currentPlan) {
+          throw new Error(
+            `长期计划不存在，无法 ${planChange.changeType}: ${planChange.currentPlan}`,
+          );
+        }
+
+        nextState.longTermPlan = undefined;
+        changes.push({
+          planId: currentPlan.id,
+          scope: "longTerm",
+          changeType: planChange.changeType,
+          before: { ...currentPlan },
+        });
+        continue;
+      }
+
+      const planIndex = nextState.shortTermPlans.findIndex(
+        (item) => item.title === planChange.currentPlan,
+      );
+      if (planIndex < 0) {
+        throw new Error(`短期计划不存在，无法 ${planChange.changeType}: ${planChange.currentPlan}`);
+      }
+
+      const currentPlan = nextState.shortTermPlans[planIndex];
+      nextState.shortTermPlans.splice(planIndex, 1);
+      changes.push({
+        planId: currentPlan.id,
+        scope: "shortTerm",
+        changeType: planChange.changeType,
+        before: { ...currentPlan },
+      });
+    }
+
+    nextState.updatedAt = nowIso;
+    return { changes, nextState };
   }
 }
 

@@ -2,6 +2,7 @@ import {
   ActionId,
   type ActionMetadata,
   allTrue,
+  type ChoiceOption,
   MajorScene,
   SHOP_PRODUCTS,
   type ShopProduct,
@@ -37,7 +38,7 @@ function formatProductDescription(product: ShopProduct) {
 export const shopAction: ActionMetadata[] = [
   {
     action: ActionId.Buy_Item_At_Shop,
-    description: "在商店购买零食，一次只能购买一件商品。[耗时10分钟]",
+    description: "在小町商店购买零食，一次只能购买一件商品。[耗时10分钟]",
     precondition(context) {
       return allTrue([
         () => isAtShop(context.characterState.location.major),
@@ -49,7 +50,7 @@ export const shopAction: ActionMetadata[] = [
 
       let remainingMoney = context.characterState.money;
 
-      const productList = SHOP_PRODUCTS.map((product) => {
+      const productList: ChoiceOption[] = SHOP_PRODUCTS.map((product) => {
         return {
           value: product.name,
           description: formatProductDescription(product),
@@ -118,7 +119,7 @@ export const shopAction: ActionMetadata[] = [
   },
   {
     action: ActionId.Go_Home_From_Shop,
-    description: "从商店回家。[体力-5][饱腹-3][耗时20分钟]",
+    description: "从小町商店回家。[体力-5][饱腹-3][耗时20分钟]",
     precondition(context) {
       return isAtShop(context.characterState.location.major);
     },
@@ -132,7 +133,7 @@ export const shopAction: ActionMetadata[] = [
   },
   {
     action: ActionId.Go_To_School_From_Shop,
-    description: "从商店前往学校。[体力-3][饱腹-2][耗时10分钟]",
+    description: "从小町商店前往星见丘高校。[体力-3][饱腹-2][耗时10分钟]",
     precondition(context) {
       return isAtShop(context.characterState.location.major);
     },
@@ -143,5 +144,19 @@ export const shopAction: ActionMetadata[] = [
       await context.characterState.changeSatiety(-2);
     },
     durationMin: 10,
+  },
+  {
+    action: ActionId.Go_To_Coast_From_Shop,
+    description: "从小町商店前往月汐海岸。[体力-7][饱腹-5][耗时30分钟]",
+    precondition(context) {
+      return isAtShop(context.characterState.location.major);
+    },
+    async executor(context) {
+      await context.characterState.setAction(ActionId.Go_To_Coast_From_Shop);
+      await context.characterState.setLocation({ major: MajorScene.Coast });
+      await context.characterState.changeStamina(-7);
+      await context.characterState.changeSatiety(-5);
+    },
+    durationMin: 30,
   },
 ];

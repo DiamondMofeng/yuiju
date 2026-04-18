@@ -1,8 +1,11 @@
 import asyncio
+import json
+import logging
 import os
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
 from graphiti_core import Graphiti
@@ -11,6 +14,8 @@ from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
 from graphiti_core.llm_client.config import LLMConfig
 from graphiti_core.llm_client.openai_generic_client import OpenAIGenericClient
 from graphiti_core.llm_client import RateLimitError
+
+logger = logging.getLogger(__name__)
 
 
 class SiliconFlowRerankerClient(CrossEncoderClient):
@@ -46,7 +51,7 @@ class SiliconFlowRerankerClient(CrossEncoderClient):
         self.rerank_url = f"{base_url}/rerank"
         self.default_model = "Qwen/Qwen3-Reranker-8B"
 
-    async def rank(self, query: str, passages: list[str]) -> list[tuple[str, float]]:
+    async def rank(self, query: str, passages: list[str]) -> list[tuple[str, float | None]]:
         """
         使用硅基流动 Rerank API 对段落进行排序
 
@@ -55,13 +60,15 @@ class SiliconFlowRerankerClient(CrossEncoderClient):
             passages (list[str]): 待排序的段落列表
 
         Returns:
-            list[tuple[str, float]]: 排序后的段落和分数（0-1 范围）
+            list[tuple[str, float | None]]: 排序后的段落和分数。
+            当无法得到可信 rerank 分数时，score 返回 None，表示“仅保留候选顺序，不提供相关度分数”。
         """
         if not passages:
             return []
 
         if len(passages) <= 1:
-            return [(passage, 1.0) for passage in passages]
+            # 单候选场景无法进行真实 rerank，不提供分数，避免被误判为高分或低分。
+            return [(passage, None) for passage in passages]
 
         # 每次调用 rank 时创建新的 client
         client = httpx.AsyncClient(
@@ -107,19 +114,17 @@ class SiliconFlowRerankerClient(CrossEncoderClient):
             return ranked_results
 
         except Exception as e:
-            # 捕获所有异常并记录日志
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"SiliconFlow rerank API failed: {str(e)}")
-            logger.warning("Falling back to simple rank (all passages score 1.0)")
-            # 降级到简单排序
-            return [(passage, 1.0) for passage in passages]
+            # rerank 失败时保留原候选顺序，但不伪造分数，避免上层把降级结果误认为真实低分或高分。
+            logger.error("SiliconFlow rerank API failed: %s", str(e))
+            logger.warning("Falling back to passthrough rank without score")
+            return [(passage, None) for passage in passages]
         finally:
             # 关闭客户端
             await client.aclose()
 
 
 _dotenv_loaded = False
+_yuiju_config_cache: dict[str, Any] | None = None
 
 
 def _load_root_dotenv() -> None:
@@ -139,6 +144,72 @@ def _load_root_dotenv() -> None:
     return
 
   load_dotenv(dotenv_path=dotenv_path, override=False)
+
+
+def _load_root_yuiju_config() -> dict[str, Any] | None:
+  """
+  通过 Node + tsx 加载项目根目录的 yuiju.config.ts。
+
+  说明：
+  - Python 运行时不直接解析 TypeScript 源码，而是复用项目已有的 Node 工具链；
+  - 结果会缓存在进程内，避免每次请求都重复启动 Node 子进程；
+  - 读取失败时返回 None，由调用方继续走环境变量 fallback，避免因为桥接失败导致服务不可用。
+  """
+
+  global _yuiju_config_cache
+  if _yuiju_config_cache is not None:
+    return _yuiju_config_cache
+
+  repo_root = Path(__file__).resolve().parents[2]
+  config_path = repo_root / "yuiju.config.ts"
+  if not config_path.exists():
+    return None
+
+  command = [
+    "node",
+    "--import",
+    "tsx",
+    "-e",
+    (
+      "import rootConfig from './yuiju.config.ts'; "
+      "const config = rootConfig?.default ?? rootConfig; "
+      "console.log(JSON.stringify(config));"
+    ),
+  ]
+
+  try:
+    result = subprocess.run(
+      command,
+      cwd=repo_root,
+      check=True,
+      capture_output=True,
+      text=True,
+    )
+  except Exception as error:
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.warning("Failed to load yuiju.config.ts via Node bridge: %s", error)
+    return None
+
+  stdout = result.stdout.strip()
+  if not stdout:
+    return None
+
+  try:
+    parsed = json.loads(stdout)
+  except json.JSONDecodeError as error:
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.warning("Failed to parse yuiju.config.ts bridge output: %s", error)
+    return None
+
+  if not isinstance(parsed, dict):
+    return None
+
+  _yuiju_config_cache = parsed
+  return _yuiju_config_cache
 
 
 @dataclass(frozen=True)
@@ -171,12 +242,36 @@ def _require_env(name: str) -> str:
   return value
 
 
+def _resolve_siliconflow_api_key() -> str:
+  """
+  解析 Graphiti 使用的 SiliconFlow API Key。
+
+  读取顺序：
+  1. 项目根目录 yuiju.config.ts 中的 llm.siliconflowApiKey
+  2. 环境变量 SILICONFLOW_API_KEY
+
+  说明：
+  - 优先与 TS 侧共享同一份配置，避免重构后 Python 配置落后；
+  - 环境变量仍保留为 fallback，方便临时调试或桥接失败时兜底。
+  """
+
+  config = _load_root_yuiju_config()
+  llm = config.get("llm") if isinstance(config, dict) else None
+  api_key = llm.get("siliconflowApiKey") if isinstance(llm, dict) else None
+
+  if isinstance(api_key, str) and api_key.strip():
+    return api_key.strip()
+
+  return _require_env("SILICONFLOW_API_KEY")
+
+
 def load_graphiti_env() -> GraphitiEnv:
   """
-  从环境变量读取 Graphiti 初始化配置。
+  读取 Graphiti 初始化配置。
 
-  约定的环境变量：
-  - SILICONFLOW_API_KEY
+  读取顺序：
+  - 优先从项目根目录 yuiju.config.ts 读取与 TS 共用的 LLM key；
+  - 如果桥接失败或配置缺失，则回退到环境变量。
   """
 
   _load_root_dotenv()
@@ -186,11 +281,11 @@ def load_graphiti_env() -> GraphitiEnv:
   default_neo4j_password = "neo4j123456"
   default_llm_base_url = "https://api.siliconflow.cn/v1"
   default_llm_model = "Pro/MiniMaxAI/MiniMax-M2.5"
-  default_llm_small_model = "Qwen/Qwen3-8B"
+  default_llm_small_model = "Qwen/Qwen3.5-9B"
   default_embedding_model = "Qwen/Qwen3-Embedding-0.6B"
   default_reranker_model = "Qwen/Qwen3-Reranker-8B"
 
-  llm_api_key = _require_env("SILICONFLOW_API_KEY")
+  llm_api_key = _resolve_siliconflow_api_key()
 
   return GraphitiEnv(
     neo4j_uri=default_neo4j_uri,

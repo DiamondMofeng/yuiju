@@ -1,3 +1,4 @@
+import type { AgentPlanChange } from "./plan";
 import type { ICharacterState, IWorldState } from "./state";
 
 export enum ActionId {
@@ -56,6 +57,27 @@ export enum ActionId {
   Drink_Coffee = "喝咖啡",
   /** 打工 */
   Work_At_Cafe = "打工",
+
+  /** 从家去公园 */
+  Go_To_Park_From_Home = "从家去公园",
+  /** 从公园回家 */
+  Go_Home_From_Park = "从公园回家",
+  /** 在公园散步 */
+  Walk_In_Park = "在公园散步",
+
+  /** 从公园去神社 */
+  Go_To_Shrine_From_Park = "从公园去神社",
+  /** 在神社参拜 */
+  Pray_At_Shrine = "参拜",
+  /** 从神社回公园 */
+  Go_To_Park_From_Shrine = "从神社回公园",
+
+  /** 从商店去月汐海岸 */
+  Go_To_Coast_From_Shop = "从商店去月汐海岸",
+  /** 从月汐海岸回商店 */
+  Go_To_Shop_From_Coast = "从月汐海岸去商店",
+  /** 在月汐海岸散步 */
+  Walk_In_Coast = "在月汐海岸散步",
 }
 
 export interface ActionContext {
@@ -65,31 +87,26 @@ export interface ActionContext {
 }
 
 /**
- * Action 参数接口
- * 用于参数化行为的具体参数定义
+ * 通用候选项结构。
+ *
+ * 用途：
+ * - 作为“吃什么 / 买什么 / 点什么”等选择器的候选项输入；
+ * - 与 Action 执行链路解耦，避免复用过时的 action 参数模型。
  */
-export interface ActionParameter {
-  /** 参数值，如："苹果" */
+export interface ChoiceOption {
+  /** 候选项唯一值，如："苹果" */
   value: string;
-  /** 数量，默认为 1 */
-  quantity?: number;
-  /** 参数描述，如："苹果可以恢复10点体力" */
+  /** 候选项描述，如："苹果可以恢复10点体力" */
   description?: string;
-  /** 参数决策原因，如："需要恢复体力" */
-  reason?: string;
   /** 额外信息，如：{ price: 5, stamina: 20 } */
   extra?: Record<string, any>;
 }
 
-/**
- * Action 决策结果
- */
 export interface ActionAgentDecision {
   action: ActionId;
   reason: string;
   durationMinute?: number;
-  updateShortTermPlan?: string[];
-  updateLongTermPlan?: string;
+  planChanges?: AgentPlanChange[];
 }
 
 export abstract class ActionMetadata {
@@ -99,20 +116,16 @@ export abstract class ActionMetadata {
   /** 前置条件 */
   abstract precondition: (context: ActionContext) => boolean | Promise<boolean>;
 
-  /** 执行器，支持接收参数，返回执行结果 */
+  /** 执行器，接收本次 Action 决策结果，返回执行结果 */
   abstract executor: (
     context: ActionContext,
-    parameters?: ActionParameter[],
+    selectedAction: ActionAgentDecision,
   ) => Promise<void | string>;
 
-  /** 行动耗时 min，支持参数化计算 */
+  /** 行动耗时 min，支持基于本次决策结果做动态计算 */
   abstract durationMin:
     | number
-    | ((
-        context: ActionContext,
-        llmDurationMin?: number,
-        parameters?: ActionParameter[],
-      ) => Promise<number>);
+    | ((context: ActionContext, selectedAction?: ActionAgentDecision) => Promise<number>);
 
   /**
    * Action 结束时产生的事件描述。
@@ -121,12 +134,11 @@ export abstract class ActionMetadata {
    */
   abstract completionEvent?:
     | string
-    | ((context: ActionContext, parameters?: ActionParameter[]) => string | Promise<string>);
+    | ((context: ActionContext, selectedAction?: ActionAgentDecision) => string | Promise<string>);
 }
 
 export interface BehaviorRecord {
   behavior: ActionId; // 改为 behavior，与数据库字段一致
   description: string; // 改为 description
   timestamp: number;
-  parameters?: ActionParameter[];
 }

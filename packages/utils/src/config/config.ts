@@ -1,7 +1,10 @@
 import rootConfig from "../../../../yuiju.config";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { YuijuConfig } from "./config-schema";
 
 let cachedConfig: Readonly<YuijuConfig> | null = null;
+let cachedProjectRoot: string | null = null;
 
 /**
  * 深度冻结配置对象，避免运行时被意外篡改。
@@ -45,6 +48,23 @@ export function getYuijuConfig(): Readonly<YuijuConfig> {
   return cachedConfig;
 }
 
+/**
+ * 获取项目根目录绝对路径。
+ *
+ * 说明：
+ * - 配置中的静态资源路径以项目根目录为基准；
+ * - 这里基于 utils 包内文件位置推导根目录，避免依赖进程启动 cwd。
+ */
+export function getYuijuProjectRoot(): string {
+  if (cachedProjectRoot) {
+    return cachedProjectRoot;
+  }
+
+  const currentDir = dirname(fileURLToPath(import.meta.url));
+  cachedProjectRoot = resolve(currentDir, "../../../../");
+  return cachedProjectRoot;
+}
+
 export type { YuijuConfig } from "./config-schema";
 export {
   defineYuijuConfig,
@@ -54,4 +74,6 @@ export {
   type YuijuMessageConfig,
   type YuijuNapcatConfig,
   type YuijuNapcatReconnectionConfig,
+  type YuijuStickerConfig,
+  type YuijuStickerMap,
 } from "./config-schema";

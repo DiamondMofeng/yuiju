@@ -40,33 +40,38 @@
 
 ## 快速开始
 
-### 环境变量
+### 项目配置
 
-项目依赖以下环境变量（定义在项目根目录 `.env`）：
+项目运行依赖根目录的 `yuiju.config.ts`，而不是旧版 `.env` 配置。
+
+首次使用时，先基于示例文件创建本地配置：
 
 ```bash
-# LLM API
-DEEPSEEK_API_KEY=xxx
-
-# 数据库
-MONGODB_URI=mongodb://localhost:27017/yuiju
-REDIS_URL=redis://localhost:6379
-
-# 运行环境
-NODE_ENV=development | production
+cp yuiju.config.ts.example yuiju.config.ts
 ```
+
+至少需要确认以下配置项：
+
+- `database.mongoUri`：MongoDB 连接地址
+- `database.redisUrl`：Redis 连接地址
+- `llm.deepseekApiKey`：LLM 调用凭据
+
+额外说明：
+
+- `NODE_ENV` 仍然是运行时环境变量，不在 `yuiju.config.ts` 中
+- `world` 依赖 Redis 与 MongoDB，启动前请确保两者可访问
 
 ### 运行命令
 
 ```bash
 # 开发模式
-pnpm dev:world
+pnpm run dev:world
 
 # 生产模式
-pnpm start:world
+pnpm run start:world
 
 # 类型检查
-pnpm --filter @yuiju/world run type-check
+pnpm run type-check:world
 ```
 
 ## 设计原则

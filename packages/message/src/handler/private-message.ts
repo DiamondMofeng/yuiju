@@ -1,9 +1,10 @@
 import "@yuiju/utils/env";
-import { setTimeout } from "node:timers/promises";
 import { getYuijuConfig } from "@yuiju/utils";
-import { type AllHandlers, type NCWebsocket, Structs } from "node-napcat-ts";
+import type { AllHandlers, NCWebsocket } from "node-napcat-ts";
 import { llmManager } from "@/llm/manager";
-import { getReplyDelayMs } from "@/utils/message";
+import { logger } from "@/utils/logger";
+import { createStoredPrivateMessage, getProtocolMessageSenderName } from "@/utils/message";
+import { sendAndRecordPrivateReply } from "@/utils/reply";
 import { closeGroupMessage, openGroupMessage } from "./group-message";
 
 const config = getYuijuConfig();
@@ -14,7 +15,7 @@ function groupMessageAction(action: string | null) {
     closeGroupMessage();
     return true;
   }
-  if (action === "/开放") {
+  if (action === "/开启") {
     openGroupMessage();
     return true;
   }
@@ -23,7 +24,7 @@ function groupMessageAction(action: string | null) {
 
 export async function privateMessageHandler(
   context: AllHandlers["message.private"],
-  _napcat: NCWebsocket,
+  napcat: NCWebsocket,
 ) {
   let receiveMessage: string | null = null;
   for (const item of context.message) {
@@ -44,33 +45,31 @@ export async function privateMessageHandler(
     return;
   }
 
-  console.log(
-    `收到来自 ${context.sender.nickname}(${context.sender.user_id}) 的消息: ${receiveMessage}`,
-  );
-  const userName = context.sender.nickname || String(context.sender.user_id);
-
   try {
-    if (!config.llm.deepseekApiKey.trim()) {
-      await context.quick_action([Structs.text("DeepSeek 未配置，稍后再试呢~")]);
+    const { quick_action: _quickAction, ...rawMessage } = context;
+    const storedMessage = await createStoredPrivateMessage(rawMessage, napcat);
+    const sessionLabel = getProtocolMessageSenderName(storedMessage);
+
+    logger.info("[message.receive.private] 收到私聊消息", {
+      sender: sessionLabel,
+      rawMessage: storedMessage.raw_message,
+    });
+
+    llmManager.recordPrivateMessage(storedMessage, sessionLabel);
+    const { text } = await llmManager.chatWithLLM(storedMessage);
+
+    const reply = (text || "").trim();
+    if (!reply || reply === "null") {
       return;
     }
 
-    const { text } = await llmManager.chatWithLLM(receiveMessage, userName);
-
-    const reply = (text || "").trim() || "呜…这句话我一时没理解呢。";
-    console.log(`回复给 ${context.sender.nickname}(${context.sender.user_id}) 的消息: ${reply}`);
-
-    const replyList = reply.split("\n").filter(Boolean);
-    for (const [index, item] of replyList.entries()) {
-      await context.quick_action([Structs.text(item)]);
-
-      const nextReply = replyList[index + 1];
-      if (nextReply) {
-        await setTimeout(getReplyDelayMs(nextReply));
-      }
-    }
+    await sendAndRecordPrivateReply({
+      napcat,
+      userId: context.user_id,
+      reply,
+      sessionLabel,
+    });
   } catch (error) {
-    console.log(error);
-    await context.quick_action([Structs.text("小久刚刚摔了一跤，重试下呀~")]);
+    logger.error("[message.reply.private] 处理私聊消息失败", error);
   }
 }

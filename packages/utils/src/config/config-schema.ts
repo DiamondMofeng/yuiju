@@ -25,12 +25,34 @@ export interface YuijuNapcatConfig {
 }
 
 /**
+ * 单个表情包配置。
+ *
+ * 说明：
+ * - `uri` 使用项目根目录相对路径，避免把机器相关的绝对路径写进配置；
+ * - `description` 会暴露给 LLM，帮助模型理解使用语境。
+ */
+export interface YuijuStickerConfig {
+  uri: string;
+  description: string;
+}
+
+/**
+ * 表情包映射表。
+ *
+ * 说明：
+ * - key 是 LLM 输出 `[[sticker:key]]` 时使用的稳定标识；
+ * - value 描述静态资源位置与使用语义。
+ */
+export type YuijuStickerMap = Record<string, YuijuStickerConfig>;
+
+/**
  * 消息服务相关配置。
  */
 export interface YuijuMessageConfig {
   napcat: NCWebsocketOptions;
   whiteList: number[];
   groupWhiteList: number[];
+  stickers: YuijuStickerMap;
 }
 
 /**
@@ -55,6 +77,8 @@ export interface YuijuLlmConfig {
  */
 export interface YuijuAppConfig {
   publicDeployment: boolean;
+  timezone: string;
+  memoryDir: string;
 }
 
 /**

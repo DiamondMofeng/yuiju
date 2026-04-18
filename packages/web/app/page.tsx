@@ -47,7 +47,7 @@ export default function HomePage() {
             inventory={homeData?.inventory}
             plans={plans}
           />
-          <HomeWorldCard time={homeData?.world?.time} />
+          <HomeWorldCard time={homeData?.world?.time} weather={homeData?.world?.weather} />
         </div>
 
         <HomeMapCard location={homeData?.status?.location} />

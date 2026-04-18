@@ -1,15 +1,10 @@
 /**
  * 计划范围。
  *
- * - main: 当前主计划，通常承载长期目标。
- * - active: 当前活跃执行中的短期计划。
+ * - longTerm: 当前长期计划，通常承载跨多天推进的目标。
+ * - shortTerm: 当前短期计划，通常承载接下来几小时到当天内的安排。
  */
-export type PlanScope = "main" | "active";
-
-/**
- * 计划状态。
- */
-export type PlanStatus = "active" | "completed" | "abandoned" | "superseded";
+export type PlanScope = "longTerm" | "shortTerm";
 
 /**
  * 计划来源。
@@ -25,15 +20,12 @@ export type PlanSource = "llm" | "system" | "user";
  *
  * 说明：
  * - id 由业务侧按标题与范围生成稳定标识；
- * - parentPlanId 用于表达活跃计划挂靠到主计划的引用关系；
  * - reason / source / expiresAt 为后续生命周期治理与记忆提炼保留稳定字段。
  */
 export interface PlanItem {
   id: string;
   title: string;
   scope: PlanScope;
-  status: PlanStatus;
-  parentPlanId?: string;
   reason?: string;
   source: PlanSource;
   expiresAt?: string;
@@ -45,29 +37,34 @@ export interface PlanItem {
  * Redis 中保存的当前计划真相源。
  */
 export interface PlanState {
-  mainPlanId?: string;
-  activePlanIds: string[];
-  mainPlan?: PlanItem;
-  activePlans: PlanItem[];
+  longTermPlan?: PlanItem;
+  shortTermPlans: PlanItem[];
   updatedAt: string;
 }
 
 /**
- * LLM 在 tick 阶段给出的计划变更提议。
+ * 主决策 agent 输出的计划变更。
+ *
+ * 字段约束：
+ * - created: 仅填写 nextPlan
+ * - updated: 同时填写 currentPlan 与 nextPlan
+ * - abandoned: 仅填写 currentPlan
+ * - completed: 仅填写 currentPlan
  */
-export interface PlanProposal {
-  mainPlanTitle?: string;
-  activePlanTitles?: string[];
-  reason?: string;
-  source?: PlanSource;
-  expiresAt?: string;
+export type AgentPlanChangeType = "created" | "updated" | "abandoned" | "completed";
+
+export interface AgentPlanChange {
+  scope: PlanScope;
+  changeType: AgentPlanChangeType;
+  currentPlan?: string;
+  nextPlan?: string;
+  reason: string;
 }
 
 /**
- * 计划变更类型。
- * superseded 被取代
+ * 内部计划变更类型与 agent 输出保持一致，避免两套语义分叉。
  */
-export type PlanChangeType = "created" | "updated" | "completed" | "abandoned" | "superseded";
+export type PlanChangeType = AgentPlanChangeType;
 
 /**
  * 单次计划变更记录。
@@ -88,7 +85,5 @@ export interface PlanChange {
  * Plan Manager 应用 proposal 后的返回结果。
  */
 export interface PlanApplyResult {
-  state: PlanState;
   changes: PlanChange[];
-  relatedPlanId?: string;
 }

@@ -4,15 +4,15 @@ import type {
   MemoryEpisode,
   MemoryEpisodeType,
   PlanChange,
+  WeatherSnapshot,
 } from "@yuiju/utils";
-import { ActionId, DEFAULT_MEMORY_SUBJECT_ID } from "@yuiju/utils";
+import { ActionId, SUBJECT_NAME } from "@yuiju/utils";
 
 export interface BuildBehaviorEpisodeInput {
   context: ActionContext;
   selectedAction: ActionAgentDecision;
   executionResult?: string;
   durationMinutes: number;
-  relatedPlanId?: string;
   happenedAt: Date;
   isDev: boolean;
 }
@@ -25,13 +25,11 @@ export interface BuildPlanUpdateEpisodesInput {
 
 interface PlanLifecycleEpisodePayload {
   planId: string;
-  planScope: "main" | "active";
+  planScope: "longTerm" | "shortTerm";
   changeType: PlanChange["changeType"];
   before?: {
     id: string;
     title: string;
-    status: string;
-    parentPlanId?: string;
     reason?: string;
     source?: string;
     expiresAt?: string;
@@ -39,8 +37,6 @@ interface PlanLifecycleEpisodePayload {
   after?: {
     id: string;
     title: string;
-    status: string;
-    parentPlanId?: string;
     reason?: string;
     source?: string;
     expiresAt?: string;
@@ -53,9 +49,13 @@ interface BehaviorEpisodePayload {
   reason: string;
   executionResult?: string;
   durationMinutes: number;
-  relatedPlanId?: string;
   location: ActionContext["characterState"]["location"];
   characterStateSnapshot: ReturnType<ActionContext["characterState"]["log"]>;
+}
+
+interface WeatherChangedEpisodePayload {
+  before: WeatherSnapshot;
+  after: WeatherSnapshot;
 }
 
 /**
@@ -84,17 +84,15 @@ export function buildBehaviorEpisode(
   return {
     source: "world_tick",
     type: "behavior",
-    subject: DEFAULT_MEMORY_SUBJECT_ID,
+    subject: SUBJECT_NAME,
     happenedAt: input.happenedAt,
     summaryText,
-    extractionStatus: "pending",
     isDev: input.isDev,
     payload: {
       action: input.selectedAction.action,
       reason: input.selectedAction.reason,
       executionResult: input.executionResult,
       durationMinutes: input.durationMinutes,
-      relatedPlanId: input.relatedPlanId,
       location: input.context.characterState.location,
       characterStateSnapshot: input.context.characterState.log(),
     },
@@ -121,6 +119,47 @@ export function buildPlanUpdateEpisodes(
   });
 }
 
+/**
+ * 构建天气变化 Episode。
+ *
+ * 说明：
+ * - 仅在天气类型或体感温度等级发生变化时写入；
+ * - 只负责生成事件真相源，不再附带额外处理状态。
+ */
+export function buildWeatherChangedEpisode(input: {
+  before: WeatherSnapshot | null;
+  after: WeatherSnapshot;
+  isDev: boolean;
+}): MemoryEpisode<WeatherChangedEpisodePayload> | null {
+  if (!input.before) {
+    return null;
+  }
+
+  if (
+    input.before.type === input.after.type &&
+    input.before.temperatureLevel === input.after.temperatureLevel
+  ) {
+    return null;
+  }
+
+  return {
+    source: "system",
+    type: "weather_changed",
+    subject: SUBJECT_NAME,
+    happenedAt: new Date(input.after.periodStartAt),
+    summaryText: [
+      "天气发生变化",
+      `天气：${input.before.type} -> ${input.after.type}`,
+      `体感：${input.before.temperatureLevel} -> ${input.after.temperatureLevel}`,
+    ].join("；"),
+    isDev: input.isDev,
+    payload: {
+      before: input.before,
+      after: input.after,
+    },
+  };
+}
+
 function createPlanLifecycleEpisode(input: {
   change: PlanChange;
   happenedAt: Date;
@@ -131,7 +170,7 @@ function createPlanLifecycleEpisode(input: {
     return null;
   }
 
-  const scopeText = change.scope === "main" ? "主计划" : "活跃计划";
+  const scopeText = change.scope === "longTerm" ? "长期计划" : "短期计划";
   const actionText = describeChangeType(change.changeType);
   const episodeType = mapPlanChangeTypeToEpisodeType(change.changeType);
   const changeReason = `本次 tick ${actionText}${scopeText}`;
@@ -139,10 +178,9 @@ function createPlanLifecycleEpisode(input: {
   return {
     source: "world_tick",
     type: episodeType,
-    subject: DEFAULT_MEMORY_SUBJECT_ID,
+    subject: SUBJECT_NAME,
     happenedAt: input.happenedAt,
     summaryText: buildPlanLifecycleSummaryText(change, scopeText, actionText),
-    extractionStatus: "pending",
     isDev: input.isDev,
     payload: {
       planId: change.planId,
@@ -152,8 +190,6 @@ function createPlanLifecycleEpisode(input: {
         ? {
             id: change.before.id,
             title: change.before.title,
-            status: change.before.status,
-            parentPlanId: change.before.parentPlanId,
             reason: change.before.reason,
             source: change.before.source,
             expiresAt: change.before.expiresAt,
@@ -163,8 +199,6 @@ function createPlanLifecycleEpisode(input: {
         ? {
             id: change.after.id,
             title: change.after.title,
-            status: change.after.status,
-            parentPlanId: change.after.parentPlanId,
             reason: change.after.reason,
             source: change.after.source,
             expiresAt: change.after.expiresAt,
@@ -199,7 +233,7 @@ function hasPlanTitleChanged(change: Pick<PlanChange, "before" | "after">): bool
  *
  * 说明：
  * - created / updated 关注“计划内容”；
- * - completed / abandoned / superseded 关注“原计划进入终态”，避免错误展示成“有了一个同名新计划”。
+ * - completed / abandoned 关注“原计划进入终态”，避免错误展示成“有了一个同名新计划”。
  */
 function buildPlanLifecycleSummaryText(
   change: PlanChange,
@@ -207,28 +241,44 @@ function buildPlanLifecycleSummaryText(
   actionText: string,
 ): string {
   const prefix = `悠酱${actionText}${scopeText}`;
+  const planReason = change.after?.reason ?? change.before?.reason;
 
   switch (change.changeType) {
     case "created":
-      return [prefix, `新计划：${stringifyPlanValue(change.after?.title)}`].join("；");
+      return [
+        prefix,
+        `新计划：${stringifyPlanValue(change.after?.title)}`,
+        planReason && `原因：${planReason}`,
+      ]
+        .filter((item): item is string => Boolean(item))
+        .join("；");
     case "updated":
       return [
         prefix,
         `原计划：${stringifyPlanValue(change.before?.title)}`,
         `新计划：${stringifyPlanValue(change.after?.title)}`,
-      ].join("；");
+        planReason && `原因：${planReason}`,
+      ]
+        .filter((item): item is string => Boolean(item))
+        .join("；");
     case "completed":
-      return [prefix, `计划：${stringifyPlanValue(change.before?.title)}`, "结果：已完成"].join(
-        "；",
-      );
+      return [
+        prefix,
+        `计划：${stringifyPlanValue(change.before?.title)}`,
+        "结果：已完成",
+        planReason && `原因：${planReason}`,
+      ]
+        .filter((item): item is string => Boolean(item))
+        .join("；");
     case "abandoned":
-      return [prefix, `计划：${stringifyPlanValue(change.before?.title)}`, "结果：已放弃"].join(
-        "；",
-      );
-    case "superseded":
-      return [prefix, `计划：${stringifyPlanValue(change.before?.title)}`, "结果：已被替代"].join(
-        "；",
-      );
+      return [
+        prefix,
+        `计划：${stringifyPlanValue(change.before?.title)}`,
+        "结果：已放弃",
+        planReason && `原因：${planReason}`,
+      ]
+        .filter((item): item is string => Boolean(item))
+        .join("；");
     default:
       return prefix;
   }
@@ -244,8 +294,6 @@ function mapPlanChangeTypeToEpisodeType(changeType: PlanChange["changeType"]): M
       return "plan_completed";
     case "abandoned":
       return "plan_abandoned";
-    case "superseded":
-      return "plan_superseded";
     default:
       return "system";
   }
@@ -273,8 +321,6 @@ function describeChangeType(changeType: PlanChange["changeType"]): string {
       return "完成了";
     case "abandoned":
       return "放弃了";
-    case "superseded":
-      return "替换了";
     default:
       return "更新了";
   }

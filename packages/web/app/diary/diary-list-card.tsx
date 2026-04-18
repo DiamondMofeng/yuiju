@@ -1,8 +1,17 @@
 "use client";
 
 import dayjs from "dayjs";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import { cn } from "@/lib/utils";
 import type { DiaryItem, DiaryPagination } from "./diary-data";
 
 interface DiaryListCardProps {
@@ -27,6 +36,7 @@ export function DiaryListCard({
   const diaries = items ?? [];
   const currentPage = pagination?.page ?? 1;
   const totalPages = pagination?.totalPages ?? 1;
+  const pageItems = buildVisiblePageItems(currentPage, totalPages);
 
   return (
     <Card>
@@ -72,26 +82,101 @@ export function DiaryListCard({
           <div className="text-sm text-[#6b7480]">
             第 {currentPage} / {totalPages} 页{pagination ? ` · 共 ${pagination.total} 篇` : ""}
           </div>
-          <div className="flex items-center justify-end gap-2">
-            <Button
-              variant="outline"
-              type="button"
-              onClick={() => onPageChange(currentPage - 1)}
-              disabled={!pagination?.hasPrevPage || isLoading}
-            >
-              上一页
-            </Button>
-            <Button
-              variant="secondary"
-              type="button"
-              onClick={() => onPageChange(currentPage + 1)}
-              disabled={!pagination?.hasNextPage || isLoading}
-            >
-              下一页
-            </Button>
-          </div>
+
+          <Pagination className="mx-0 w-auto justify-end max-[640px]:justify-center">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  href="#"
+                  className={cn(
+                    !pagination?.hasPrevPage || isLoading
+                      ? "pointer-events-none opacity-50"
+                      : "cursor-pointer",
+                  )}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    if (!pagination?.hasPrevPage || isLoading) return;
+                    onPageChange(currentPage - 1);
+                  }}
+                />
+              </PaginationItem>
+
+              {pageItems.map((item) =>
+                item === "ellipsis-left" || item === "ellipsis-right" ? (
+                  <PaginationItem key={item}>
+                    <PaginationEllipsis />
+                  </PaginationItem>
+                ) : (
+                  <PaginationItem key={item}>
+                    <PaginationLink
+                      href="#"
+                      isActive={item === currentPage}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        if (item === currentPage || isLoading) return;
+                        onPageChange(item);
+                      }}
+                    >
+                      {item}
+                    </PaginationLink>
+                  </PaginationItem>
+                ),
+              )}
+
+              <PaginationItem>
+                <PaginationNext
+                  href="#"
+                  className={cn(
+                    !pagination?.hasNextPage || isLoading
+                      ? "pointer-events-none opacity-50"
+                      : "cursor-pointer",
+                  )}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    if (!pagination?.hasNextPage || isLoading) return;
+                    onPageChange(currentPage + 1);
+                  }}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
         </div>
       </CardContent>
     </Card>
   );
+}
+
+function buildVisiblePageItems(
+  currentPage: number,
+  totalPages: number,
+): Array<number | "ellipsis-left" | "ellipsis-right"> {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  if (currentPage <= 4) {
+    return [1, 2, 3, 4, 5, "ellipsis-right", totalPages];
+  }
+
+  if (currentPage >= totalPages - 3) {
+    return [
+      1,
+      "ellipsis-left",
+      totalPages - 4,
+      totalPages - 3,
+      totalPages - 2,
+      totalPages - 1,
+      totalPages,
+    ];
+  }
+
+  return [
+    1,
+    "ellipsis-left",
+    currentPage - 1,
+    currentPage,
+    currentPage + 1,
+    "ellipsis-right",
+    totalPages,
+  ];
 }

@@ -1,35 +1,28 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { isPublicDeployment } from "@/lib/public-deployment";
 
 import { ActivityClientShell } from "./activity-client-shell";
-import type { ActivityItem, ActivityResponsePayload } from "./activity-data";
-import { ActivityPageHeader } from "./activity-page-header";
 
-export default async function ActivityPage() {
+function ActivityPageFallback() {
+  return (
+    <div className="rounded-2xl border border-[rgba(217,230,245,0.9)] bg-white/90 px-4 py-8 text-center text-sm text-[#6b7480] shadow-[0_10px_25px_rgba(21,33,54,0.06)]">
+      正在加载动态页...
+    </div>
+  );
+}
+
+export default function ActivityPage() {
   // 核心逻辑：对外展示版本隐藏动态页。
   if (isPublicDeployment()) {
     notFound();
   }
 
-  let events: ActivityItem[] | undefined;
-  let count: number | undefined;
-
-  try {
-    const response = await fetch("/api/nodejs/activity/index", { cache: "no-store" });
-    if (response.ok) {
-      const payload = (await response.json()) as ActivityResponsePayload;
-      events = payload.data?.events;
-      count = payload.data?.count ?? payload.data?.events?.length;
-    }
-  } catch {
-    events = undefined;
-    count = undefined;
-  }
-
   return (
     <main className="max-w-[1200px] mx-auto px-[18px] pt-[18px] pb-[36px]">
-      <ActivityPageHeader count={count} />
-      <ActivityClientShell events={events} />
+      <Suspense fallback={<ActivityPageFallback />}>
+        <ActivityClientShell />
+      </Suspense>
     </main>
   );
 }

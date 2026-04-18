@@ -1,5 +1,4 @@
 import { createDeepSeek } from "@ai-sdk/deepseek";
-import { createMoonshotAI } from "@ai-sdk/moonshotai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { wrapLanguageModel } from "ai";
 import { getYuijuConfig } from "../config";
@@ -11,11 +10,6 @@ const config = getYuijuConfig();
  */
 export const deepseekProvider = createDeepSeek({
   apiKey: config.llm.deepseekApiKey,
-});
-
-const moonshotAIProvider = createMoonshotAI({
-  apiKey: config.llm.moonshotApiKey,
-  baseURL: "https://api.moonshot.cn/v1",
 });
 
 /**
@@ -32,7 +26,7 @@ export const siliconflow = createOpenAICompatible({
  * 用于低成本判断、裁决等轻量任务的小模型。
  */
 export const smallModel = wrapLanguageModel({
-  model: siliconflow("Qwen/Qwen3.5-35B-A3B"),
+  model: siliconflow("Qwen/Qwen3-8B"),
   middleware: [],
 });
 
@@ -40,7 +34,7 @@ export const smallModel = wrapLanguageModel({
  * 用于复杂决策、长链路思考的强模型。
  */
 export const strongModel = wrapLanguageModel({
-  model: moonshotAIProvider("kimi-k2.5"),
+  model: deepseekProvider("deepseek-reasoner"),
   middleware: [],
 });
 
@@ -49,5 +43,10 @@ export const strongModel = wrapLanguageModel({
  */
 export const minimaxModel = wrapLanguageModel({
   model: siliconflow("Pro/MiniMaxAI/MiniMax-M2.5"),
+  middleware: [],
+});
+
+export const qwen3Model = wrapLanguageModel({
+  model: siliconflow("Qwen/Qwen3.5-397B-A17B"),
   middleware: [],
 });

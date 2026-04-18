@@ -6,9 +6,18 @@ export type {
   ActivityTrigger,
 } from "@/lib/activity/activity-view";
 
+export interface ActivityPagination {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  hasPrevPage: boolean;
+  hasNextPage: boolean;
+}
+
 export interface ActivityResponsePayload {
   data?: {
-    count?: number;
     events?: ActivityItem[];
+    pagination?: ActivityPagination;
   };
 }

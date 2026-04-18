@@ -5,7 +5,7 @@ export const schoolAction: ActionMetadata[] = [
   {
     // TODO：逻辑优化，上课时间应该是固定的时间段，而不是随时可以上课
     action: ActionId.Study_At_School,
-    description: "在学校上课。[体力-12][饱腹-12][心情-2][耗时动态]",
+    description: "在星见丘高校上课。[体力-12][饱腹-12][心情-5][耗时动态]",
     precondition(context) {
       return allTrue([
         () => {
@@ -20,7 +20,7 @@ export const schoolAction: ActionMetadata[] = [
       await context.characterState.setAction(ActionId.Study_At_School);
       await context.characterState.changeStamina(-12);
       await context.characterState.changeSatiety(-12);
-      await context.characterState.changeMood(-2);
+      await context.characterState.changeMood(-5);
     },
     durationMin: async (context) => {
       const now = context.worldState.time.clone();
@@ -37,7 +37,7 @@ export const schoolAction: ActionMetadata[] = [
   },
   {
     action: ActionId.Go_Home_From_School,
-    description: "从学校回家。[体力-7][饱腹-4][耗时30分钟]",
+    description: "从星见丘高校回家。[体力-7][饱腹-5][耗时30分钟]",
     precondition(context) {
       return allTrue([context.characterState.stamina >= 10, isAfternoon(context)]);
     },
@@ -48,13 +48,13 @@ export const schoolAction: ActionMetadata[] = [
       });
 
       await context.characterState.changeStamina(-7);
-      await context.characterState.changeSatiety(-4);
+      await context.characterState.changeSatiety(-5);
     },
     durationMin: 30,
   },
   {
     action: ActionId.Go_To_Shop_From_School,
-    description: "从学校前往商店。[体力-3][饱腹-2][耗时10分钟]",
+    description: "从星见丘高校前往小町商店。[体力-3][饱腹-2][耗时10分钟]",
     precondition(context) {
       return context.characterState.stamina >= 5 && !isNight(context);
     },
@@ -71,7 +71,7 @@ export const schoolAction: ActionMetadata[] = [
   },
   {
     action: ActionId.Go_To_Cafe_From_School,
-    description: "从学校去咖啡店。[体力-3][饱腹-2][耗时10分钟]",
+    description: "从星见丘高校去薄暮咖啡馆。[体力-3][饱腹-2][耗时10分钟]",
     precondition(context) {
       return allTrue([context.characterState.stamina >= 5, !isNight(context)]);
     },

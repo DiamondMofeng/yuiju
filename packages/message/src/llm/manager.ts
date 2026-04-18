@@ -1,88 +1,109 @@
-import { getCharacterCardPrompt } from "@yuiju/source";
 import {
-  deepseekProvider,
-  getMemoryServiceClientFromEnv,
-  memorySearchTool,
-  queryCharacterStateTool,
-  smallModel,
+  buildMessageHistoryUserPrompt,
+  diarySearchTool,
+  getCharacterCardPrompt,
+  getGroupReplyDecisionSystemPrompt,
+  getPersonMemoryTool,
+  listPersonMemoriesTool,
+  minimaxModel,
+  queryStateTool,
+  queryWorldMapTool,
+  siliconflow,
+  todayEventSearchTool,
 } from "@yuiju/utils";
-import { generateText, type ModelMessage, Output, stepCountIs } from "ai";
+import { generateText, Output, stepCountIs } from "ai";
 import { z } from "zod";
-import { ChatSessionManager } from "../chat-session-manager";
+import { stickerState } from "@/state/sticker";
+import { logger } from "@/utils/logger";
+import {
+  getGroupDisplayName,
+  getProtocolMessageSenderName,
+  type StoredGroupMessage,
+  type StoredPrivateMessage,
+} from "@/utils/message";
+import {
+  type AbstractChatSessionManager,
+  GroupChatSessionManager,
+  PrivateChatSessionManager,
+} from "./chat-session-manager";
 
-const GROUP_SESSION_KEY_PREFIX = "group:";
+type ActiveGroupChatTask = {
+  controller: AbortController;
+  /**
+   * 直接复用触发本次回复生成的群消息 `message_id`，用于识别“当前群里最新的一次回复生成请求”。
+   *
+   * 说明：
+   * - 仅依赖 abort() 不足以完全避免竞态，旧请求可能在被取消前后恰好返回；
+   * - 因此在生成完成和真正发送回复前，都要再次校验 requestId 是否仍然是该群最新值；
+   * - 只要 requestId 已经过期，就把这次结果视为失效，禁止继续发送消息。
+   */
+  requestId: number;
+};
 
-export interface GroupConversationInput {
-  groupId: number;
-  groupName: string;
-  senderName: string;
-  content: string;
-  timestamp: Date;
-  isAtBot: boolean;
-}
+export type GroupChatResult =
+  | {
+      status: "completed";
+      requestId: number;
+      text: string;
+    }
+  | {
+      status: "cancelled";
+    };
 
 export class LLMManager {
-  private memoryClient = getMemoryServiceClientFromEnv();
-  private privateSession: ChatSessionManager;
-  private groupSession: ChatSessionManager;
+  private privateSession: AbstractChatSessionManager<StoredPrivateMessage>;
+  private groupSession: AbstractChatSessionManager<StoredGroupMessage>;
+  /**
+   * 记录每个群当前正在执行的回复生成任务，用于在同群新消息到来时取消旧请求。
+   */
+  private activeGroupChatTaskByGroupId = new Map<number, ActiveGroupChatTask>();
+  /**
+   * 记录每个群当前“最新那条触发回复的消息 id”。
+   *
+   * 说明：
+   * - 这里保存的是最新请求对应的 `message_id`，不是独立生成的序号；
+   * - 生成完成后和发送回复前都会再次比对它，避免旧请求在竞态下误发消息。
+   */
+  private latestGroupChatRequestIdByGroupId = new Map<number, number>();
 
-  constructor(conversationLimit: number = 10) {
-    this.privateSession = new ChatSessionManager({
-      conversationLimit,
-      memoryClient: this.memoryClient,
-      windowMs: 10 * 60 * 1000,
+  constructor() {
+    this.privateSession = new PrivateChatSessionManager({
+      conversationLimit: 20,
+      conversationTtlMs: 8 * 60 * 60 * 1000,
+      summaryFlushMessageCount: 15,
+      summaryFlushIdleMs: 30 * 60 * 1000,
+      episodeIdleMs: 12 * 60 * 60 * 1000,
+      episodeMessageCountLimit: 30,
     });
-    this.groupSession = new ChatSessionManager({
-      conversationLimit: 30,
-      memoryClient: this.memoryClient,
-      windowMs: 10 * 60 * 1000,
+    this.groupSession = new GroupChatSessionManager({
+      conversationLimit: 20,
+      conversationTtlMs: 8 * 60 * 60 * 1000,
+      summaryFlushMessageCount: 15,
+      summaryFlushIdleMs: 30 * 60 * 1000,
+      episodeIdleMs: 12 * 60 * 60 * 1000,
+      episodeMessageCountLimit: 30,
     });
-  }
-
-  public async chatWithLLM(input: string, userName: string) {
-    const systemPrompt = getCharacterCardPrompt({
-      userName,
-    });
-
-    this.privateSession.recordMessage({
-      counterparty_name: userName,
-      role: "user",
-      content: input,
-      timestamp: new Date(),
-    });
-    const messages: ModelMessage[] = this.privateSession.getLLMMessages(userName);
-
-    const result = await generateText({
-      model: deepseekProvider("deepseek-chat"),
-      messages,
-      system: systemPrompt,
-      tools: {
-        memorySearch: memorySearchTool,
-        queryCharacterState: queryCharacterStateTool,
-      },
-      stopWhen: stepCountIs(10),
-    });
-
-    // 添加助手回复到对话历史
-    this.privateSession.recordMessage({
-      counterparty_name: userName,
-      role: "assistant",
-      content: result.text,
-      timestamp: new Date(),
-    });
-
-    return result;
   }
 
   /**
-   * 将群消息写入群会话历史，保证裁决模型与回复模型拿到的是同一份上下文。
+   * 将群原始消息写入群会话历史，保证裁决模型与回复模型拿到的是同一份上下文。
    */
-  public recordGroupMessage(input: GroupConversationInput) {
+  public recordGroupMessage(message: StoredGroupMessage, sessionLabel?: string) {
     this.groupSession.recordMessage({
-      counterparty_name: this.buildGroupSessionKey(input.groupId),
-      role: "user",
-      content: this.buildGroupUserMessage(input),
-      timestamp: input.timestamp,
+      sessionId: this.buildGroupSessionKey(message.group_id),
+      sessionLabel: sessionLabel ?? getGroupDisplayName(message),
+      message,
+    });
+  }
+
+  /**
+   * 将私聊原始消息写入私聊会话历史，保证回复模型与真实会话事实源保持一致。
+   */
+  public recordPrivateMessage(message: StoredPrivateMessage, sessionLabel?: string) {
+    this.privateSession.recordMessage({
+      sessionId: this.buildPrivateSessionKey(message.user_id),
+      sessionLabel: sessionLabel ?? getProtocolMessageSenderName(message),
+      message,
     });
   }
 
@@ -91,94 +112,190 @@ export class LLMManager {
    *
    * 说明：
    * - 这里只返回 shouldReply，不承担具体回复生成；
-   * - 被 @ 的消息不会走这个流程，而是由 handler 直接触发回复模型。
+   * - 无论是否直接对悠酱说话（例如 @ 悠酱），都统一走这个流程判断是否回复；
+   * - handler 只会在确定需要回复后，再判断是否应附带引用回复。
    */
-  public async shouldReplyGroupMessage(input: GroupConversationInput): Promise<boolean> {
-    const messages = this.groupSession.getLLMMessages(this.buildGroupSessionKey(input.groupId));
-
-    const systemPrompt = [
-      "你是群聊回复裁决器，唯一任务是判断悠酱现在是否应该回复最新一条普通群消息。",
-      "你只输出结构化结果中的 shouldReply 布尔值，不负责生成回复内容。",
-      "群聊不是私聊，不需要每条都回，更不能抢话。回复策略应该保守，只在必要时才回复",
-      "shouldReply=true 的场景：消息中提到了悠酱、内容和悠酱强相关、有人心情难受需要安慰。",
-      "其余场景 shouldReply=false",
-    ].join("\n");
+  public async shouldReplyGroupMessage(
+    message: StoredGroupMessage,
+    directedType?: "at" | "reply",
+  ): Promise<boolean> {
+    const { historyJson, summary } = await this.groupSession.getHistoryJson(
+      this.buildGroupSessionKey(message.group_id),
+      10,
+    );
 
     const { output } = await generateText({
-      model: smallModel,
-      system: systemPrompt,
+      model: minimaxModel,
+      // providerOptions: {
+      //   Siliconflow: {
+      //     enable_thinking: false,
+      //   },
+      // },
+      system: getGroupReplyDecisionSystemPrompt(),
       messages: [
-        ...messages,
         {
           role: "user",
-          content: [
-            "请只判断上一条最新群消息是否值得悠酱回复",
-            `最新发言者：${input.senderName}`,
-            `最新消息：${input.content}`,
-          ].join("\n"),
+          content: buildMessageHistoryUserPrompt({
+            summary,
+            historyJson,
+            latestMessageDirectedType: directedType,
+          }),
         },
       ],
       output: Output.object({
         schema: z.object({
-          shouldReply: z.boolean().describe("是否应该回复这条普通群消息"),
+          shouldReply: z.boolean().describe("是否应该回复这条群消息"),
         }),
       }),
     });
 
+    logger.info(`[shouldReplyGroupMessage] ${output.shouldReply ? "回复" : "不回复"}`);
+
     return output.shouldReply;
+  }
+
+  private buildPrivateSessionKey(userId: number): string {
+    return `private:${userId}`;
+  }
+
+  private buildGroupSessionKey(groupId: number): string {
+    return `group:${groupId}`;
   }
 
   /**
    * 使用主回复模型为群聊生成自然语言回复。
    */
-  public async chatInGroup(input: GroupConversationInput) {
-    const sessionKey = this.buildGroupSessionKey(input.groupId);
-    const systemPrompt = this.buildGroupReplySystemPrompt(input);
-    const messages: ModelMessage[] = this.groupSession.getLLMMessages(sessionKey);
+  public async chatInGroup(message: StoredGroupMessage): Promise<GroupChatResult> {
+    const groupId = message.group_id;
+    const sessionKey = this.buildGroupSessionKey(groupId);
+    const requestId = message.message_id;
+    const previousTask = this.activeGroupChatTaskByGroupId.get(groupId);
+    if (previousTask) {
+      logger.info("[message.llm.group] 新消息到来，取消同群上一条回复生成", {
+        groupId,
+        groupName: getGroupDisplayName(message),
+        previousRequestId: previousTask.requestId,
+        nextRequestId: requestId,
+      });
+      previousTask.controller.abort("replaced by newer group chat request");
+    }
 
-    const result = await generateText({
-      model: deepseekProvider("deepseek-chat"),
-      messages,
-      system: systemPrompt,
-      tools: {
-        memorySearch: memorySearchTool,
-        queryCharacterState: queryCharacterStateTool,
-      },
-      stopWhen: stepCountIs(10),
+    const controller = new AbortController();
+    this.latestGroupChatRequestIdByGroupId.set(groupId, requestId);
+    this.activeGroupChatTaskByGroupId.set(groupId, {
+      controller,
+      requestId,
     });
 
-    this.groupSession.recordMessage({
-      counterparty_name: sessionKey,
-      role: "assistant",
-      content: result.text,
-      timestamp: new Date(),
+    const { historyJson, summary } = await this.groupSession.getHistoryJson(sessionKey);
+
+    const systemPrompt = [
+      getCharacterCardPrompt(),
+      stickerState.buildPromptSection(),
+      "## 当前聊天场景",
+      `你现在正在 QQ 群「${getGroupDisplayName(message)}」`,
+    ].join("\n\n");
+
+    try {
+      const result = await generateText({
+        model: minimaxModel,
+        providerOptions: {
+          Siliconflow: {
+            enable_thinking: false,
+          },
+        },
+        system: systemPrompt,
+        messages: [
+          {
+            role: "user",
+            content: buildMessageHistoryUserPrompt({
+              summary,
+              historyJson,
+            }),
+          },
+        ],
+        tools: {
+          todayEventSearch: todayEventSearchTool,
+          diarySearch: diarySearchTool,
+          listPersonMemories: listPersonMemoriesTool,
+          getPersonMemory: getPersonMemoryTool,
+          queryStateTool: queryStateTool,
+          queryWorldMap: queryWorldMapTool,
+        },
+        stopWhen: stepCountIs(20),
+        abortSignal: controller.signal,
+      });
+
+      if (!this.isLatestGroupChatRequest(groupId, requestId)) {
+        return { status: "cancelled" };
+      }
+
+      logger.info("[message.llm.group] LLM 返回群聊回复", {
+        groupName: getGroupDisplayName(message),
+        text: result.text,
+      });
+
+      return {
+        status: "completed",
+        requestId,
+        text: result.text,
+      };
+    } catch (error) {
+      if (controller.signal.aborted) {
+        return { status: "cancelled" };
+      }
+      throw error;
+    } finally {
+      const activeTask = this.activeGroupChatTaskByGroupId.get(groupId);
+      if (activeTask?.requestId === requestId) {
+        this.activeGroupChatTaskByGroupId.delete(groupId);
+      }
+    }
+  }
+
+  public isLatestGroupChatRequest(groupId: number, requestId: number): boolean {
+    return this.latestGroupChatRequestIdByGroupId.get(groupId) === requestId;
+  }
+
+  public async chatWithLLM(message: StoredPrivateMessage) {
+    const sessionId = this.buildPrivateSessionKey(message.user_id);
+    const { historyJson, summary } = await this.privateSession.getHistoryJson(sessionId);
+    const systemPrompt = [getCharacterCardPrompt(), stickerState.buildPromptSection()].join("\n\n");
+
+    const result = await generateText({
+      model: siliconflow("Pro/moonshotai/Kimi-K2.5"),
+      providerOptions: {
+        Siliconflow: {
+          enable_thinking: false,
+        },
+      },
+      system: systemPrompt,
+      messages: [
+        {
+          role: "user",
+          content: buildMessageHistoryUserPrompt({
+            summary,
+            historyJson,
+          }),
+        },
+      ],
+      tools: {
+        todayEventSearch: todayEventSearchTool,
+        diarySearch: diarySearchTool,
+        listPersonMemories: listPersonMemoriesTool,
+        getPersonMemory: getPersonMemoryTool,
+        queryStateTool: queryStateTool,
+        queryWorldMap: queryWorldMapTool,
+      },
+      stopWhen: stepCountIs(20),
+    });
+
+    logger.info("[message.llm.private] LLM 返回私聊回复", {
+      sessionLabel: getProtocolMessageSenderName(message),
+      text: result.text,
     });
 
     return result;
-  }
-
-  private buildGroupSessionKey(groupId: number): string {
-    return `${GROUP_SESSION_KEY_PREFIX}${groupId}`;
-  }
-
-  /**
-   * 群聊历史里需要显式保留发言人名字，否则模型无法区分多用户对话。
-   */
-  private buildGroupUserMessage(input: GroupConversationInput): string {
-    return `${input.senderName}：${input.content}`;
-  }
-
-  private buildGroupReplySystemPrompt(input: GroupConversationInput): string {
-    return [
-      getCharacterCardPrompt({
-        userName: input.senderName,
-      }),
-      "## 当前聊天场景",
-      `你现在正在 QQ 群「${input.groupName}」里说话，不是私聊。`,
-      "群聊回复要更克制、更自然，像在群里顺手接一句，不要像一对一长聊。",
-      "如果这条消息是对你的直接提及，系统已经会自动 @ 回发送者，你不要在正文里手动重复写 @。",
-      "默认 1-2 句，尽量简短，除非内容确实需要补充。",
-    ].join("\n\n");
   }
 }
 
