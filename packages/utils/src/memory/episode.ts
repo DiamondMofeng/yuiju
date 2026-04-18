@@ -40,8 +40,9 @@ export type MemoryEpisodeType =
  * 事实抽取状态。
  *
  * 说明：
- * - 历史命名沿用 extractionStatus，当前语义更接近“长期记忆处理状态”；
- * - pending / processing / done / skipped / failed 分别表示待处理、处理中、已写入、被拦截、处理失败。
+ * - 历史命名沿用 extractionStatus，当前主要用于兼容既有存储结构与界面展示；
+ * - 长期记忆后处理链已移除，新写入的数据统一使用 skipped；
+ * - 其余状态仍保留在类型中，用于兼容历史记录读取。
  */
 export type MemoryEpisodeExtractionStatus =
   | "pending"

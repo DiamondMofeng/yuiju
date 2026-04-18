@@ -20,7 +20,6 @@ export const todayEventSearchTool: Tool = {
   inputSchema: todayEventSearchInputSchema,
   execute: async (input) => {
     const result = await searchEpisodes({
-      memoryType: "episode",
       topK: input.limit,
       timeSort: input.timeSort ?? "desc",
     });
@@ -35,7 +34,6 @@ export const diarySearchTool: Tool = {
   inputSchema: diarySearchInputSchema,
   execute: async (input) => {
     const result = await searchDiaries({
-      memoryType: "diary",
       topK: input.limit,
       startTime: input.startDate ? `${input.startDate} 00:00:00` : undefined,
       endTime: input.endDate ? `${input.endDate} 23:59:59` : undefined,

@@ -87,7 +87,7 @@ export function buildBehaviorEpisode(
     subject: SUBJECT_NAME,
     happenedAt: input.happenedAt,
     summaryText,
-    extractionStatus: "pending",
+    extractionStatus: "skipped",
     isDev: input.isDev,
     payload: {
       action: input.selectedAction.action,
@@ -183,7 +183,7 @@ function createPlanLifecycleEpisode(input: {
     subject: SUBJECT_NAME,
     happenedAt: input.happenedAt,
     summaryText: buildPlanLifecycleSummaryText(change, scopeText, actionText),
-    extractionStatus: "pending",
+    extractionStatus: "skipped",
     isDev: input.isDev,
     payload: {
       planId: change.planId,

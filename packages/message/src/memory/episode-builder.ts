@@ -58,7 +58,7 @@ export function buildConversationEpisode(input: {
     ]
       .filter(Boolean)
       .join("；"),
-    extractionStatus: "pending",
+    extractionStatus: "skipped",
     isDev: input.isDev,
     payload: {
       counterpartyName: input.sessionLabel,

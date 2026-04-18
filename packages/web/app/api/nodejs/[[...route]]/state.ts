@@ -3,7 +3,6 @@ import {
   getRedis,
   initCharacterStateData,
   isDev,
-  processPendingMemoryEpisodes,
   REDIS_KEY_CHARACTER_STATE,
   SUBJECT_NAME,
 } from "@yuiju/utils";
@@ -140,7 +139,7 @@ stateRoute.post("/allowance", async (context) => {
       subject: SUBJECT_NAME,
       happenedAt: new Date(),
       summaryText: reason ? `${descriptionBase}；原因：${reason}` : descriptionBase,
-      extractionStatus: "pending",
+      extractionStatus: "skipped",
       isDev: isDev(),
       payload: {
         eventName: "金币变动",
@@ -150,9 +149,6 @@ stateRoute.post("/allowance", async (context) => {
         delta,
         reason: reason || undefined,
       },
-    });
-    processPendingMemoryEpisodes({ limit: 1, isDev: isDev() }).catch((error) => {
-      console.error("Failed to process pending memory episodes:", error);
     });
   } catch (err) {
     try {

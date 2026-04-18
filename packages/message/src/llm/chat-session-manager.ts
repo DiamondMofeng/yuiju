@@ -3,7 +3,6 @@ import {
   emitMemoryEpisode,
   getTimeWithWeekday,
   isDev,
-  processPendingMemoryEpisodes,
   smallModel,
 } from "@yuiju/utils";
 import { generateText } from "ai";
@@ -380,9 +379,6 @@ export class BaseChatSessionManager<
     });
 
     await emitMemoryEpisode(episode);
-    processPendingMemoryEpisodes({ limit: 1, isDev: input.isDev }).catch((error) => {
-      console.error("Failed to process pending memory episodes:", error);
-    });
   }
 
   /**

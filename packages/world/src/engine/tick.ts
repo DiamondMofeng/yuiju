@@ -6,7 +6,6 @@ import {
   getRecentMemoryEpisodes,
   isDev,
   type PlanChange,
-  processPendingMemoryEpisodes,
   type RunningActionState,
   SUBJECT_NAME,
 } from "@yuiju/utils";
@@ -113,9 +112,6 @@ export async function tick(params: TickParams): Promise<TickReturn> {
       try {
         await emitMemoryEpisode(planEpisode);
         logger.info("[tick] built plan_update episode", planEpisode);
-        processPendingMemoryEpisodes({ limit: 1, isDev: isDev() }).catch((error) => {
-          logger.error("[tick] process pending memory episodes failed", error);
-        });
       } catch (error) {
         logger.error("[tick] write plan_update episode failed", error);
       }
@@ -143,9 +139,6 @@ export async function tick(params: TickParams): Promise<TickReturn> {
       try {
         await emitMemoryEpisode(behaviorEpisode);
         logger.debug("[tick] built behavior episode", behaviorEpisode);
-        processPendingMemoryEpisodes({ limit: 1, isDev: isDev() }).catch((error) => {
-          logger.error("[tick] process pending memory episodes failed", error);
-        });
       } catch (e) {
         logger.error("[tick] build world_action episode failed", e);
       }
