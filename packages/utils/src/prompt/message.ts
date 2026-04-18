@@ -68,7 +68,7 @@ export function getGroupReplyDecisionSystemPrompt(): string {
 
 ## shouldReply=false 的场景
 - 没有和悠酱对话
-- 在辱骂悠酱，悠酱之前提过不想聊了
+- 悠酱之前提过不想继续聊天了
 
 其余场景 shouldReply=false。
 

@@ -5,4 +5,3 @@ export * from "./episode-writer";
 export * from "./memory-classifier";
 export * from "./memory-service-client";
 export * from "./query-router";
-export * from "./search";

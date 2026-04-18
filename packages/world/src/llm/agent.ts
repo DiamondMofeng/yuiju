@@ -10,11 +10,12 @@ import {
   chooseActionPrompt,
   chooseCafeCoffeePrompt,
   chooseFoodPrompt,
+  diarySearchTool,
   chooseShopProductPrompt,
   chooseShrinePrayerPrompt,
   queryWorldMapTool,
   strongModel,
-  memorySearchTool as unifiedMemorySearchTool,
+  todayEventSearchTool,
 } from "@yuiju/utils";
 import { generateText, Output, stepCountIs } from "ai";
 import dayjs from "dayjs";
@@ -71,7 +72,8 @@ export async function chooseActionAgent(
       const { output, reasoningText } = await generateText({
         model: strongModel,
         tools: {
-          memorySearch: unifiedMemorySearchTool,
+          todayEventSearch: todayEventSearchTool,
+          diarySearch: diarySearchTool,
           queryAvailableFood: queryAvailableFood(context),
           queryWorldMap: queryWorldMapTool,
         },

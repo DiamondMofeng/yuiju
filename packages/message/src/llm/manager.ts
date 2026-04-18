@@ -1,12 +1,13 @@
 import {
   buildMessageHistoryUserPrompt,
+  diarySearchTool,
   getCharacterCardPrompt,
   getGroupReplyDecisionSystemPrompt,
-  memorySearchTool,
   minimaxModel,
   queryStateTool,
   queryWorldMapTool,
   siliconflow,
+  todayEventSearchTool,
 } from "@yuiju/utils";
 import { generateText, Output, stepCountIs } from "ai";
 import { z } from "zod";
@@ -220,7 +221,8 @@ export class LLMManager {
           },
         ],
         tools: {
-          memorySearch: memorySearchTool,
+          todayEventSearch: todayEventSearchTool,
+          diarySearch: diarySearchTool,
           queryStateTool: queryStateTool,
           queryWorldMap: queryWorldMapTool,
         },
@@ -282,7 +284,8 @@ export class LLMManager {
         },
       ],
       tools: {
-        memorySearch: memorySearchTool,
+        todayEventSearch: todayEventSearchTool,
+        diarySearch: diarySearchTool,
         queryStateTool: queryStateTool,
         queryWorldMap: queryWorldMapTool,
       },

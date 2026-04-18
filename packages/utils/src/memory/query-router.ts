@@ -330,25 +330,3 @@ export async function searchFacts(input: MemorySearchInput): Promise<MemorySearc
     .sort((left, right) => compareResultsByScoreAndTime(left, right, normalized.timeSort))
     .slice(0, normalized.topK);
 }
-
-class MemoryQueryRouter {
-  async search(input: MemorySearchInput): Promise<MemorySearchResult[]> {
-    const normalized = normalizeInput(input);
-
-    if (normalized.memoryType === "episode") {
-      return await searchEpisodes(normalized);
-    }
-
-    if (normalized.memoryType === "diary") {
-      return await searchDiaries(normalized);
-    }
-
-    if (normalized.memoryType === "fact") {
-      return await searchFacts(normalized);
-    }
-
-    return [];
-  }
-}
-
-export const memoryQueryRouter: MemoryQueryRouter = new MemoryQueryRouter();

@@ -46,7 +46,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ### 6. packages/python（Python 服务）
 
-- **核心功能**：提供额外的 Python 服务（如机器学习模型）
+- **核心功能**：提供 Graphiti 长期记忆服务，已废弃
 - **开发命令**：`pnpm run start:python`
 
 ## 常用开发命令
