@@ -78,6 +78,7 @@ export interface YuijuLlmConfig {
 export interface YuijuAppConfig {
   publicDeployment: boolean;
   timezone: string;
+  memoryDir: string;
 }
 
 /**

@@ -3,6 +3,8 @@ import {
   diarySearchTool,
   getCharacterCardPrompt,
   getGroupReplyDecisionSystemPrompt,
+  getPersonMemoryTool,
+  listPersonMemoriesTool,
   minimaxModel,
   queryStateTool,
   queryWorldMapTool,
@@ -65,29 +67,21 @@ export class LLMManager {
   private latestGroupChatRequestIdByGroupId = new Map<number, number>();
 
   constructor() {
-    /**
-     * 群聊/私聊先保留两份独立配置入口，方便后续在不改调用方的前提下继续分叉策略。
-     */
-    const privateSessionOptions = {
-      conversationLimit: 20,
-      conversationTtlMs: 8 * 60 * 60 * 1000,
-      summaryFlushMessageCount: 15,
-      summaryFlushIdleMs: 30 * 60 * 1000,
-      episodeIdleMs: 4 * 60 * 60 * 1000,
-    } as const;
-    const groupSessionOptions = {
-      conversationLimit: 20,
-      conversationTtlMs: 8 * 60 * 60 * 1000,
-      summaryFlushMessageCount: 15,
-      summaryFlushIdleMs: 30 * 60 * 1000,
-      episodeIdleMs: 4 * 60 * 60 * 1000,
-    } as const;
-
     this.privateSession = new PrivateChatSessionManager({
-      ...privateSessionOptions,
+      conversationLimit: 20,
+      conversationTtlMs: 8 * 60 * 60 * 1000,
+      summaryFlushMessageCount: 15,
+      summaryFlushIdleMs: 30 * 60 * 1000,
+      episodeIdleMs: 12 * 60 * 60 * 1000,
+      episodeMessageCountLimit: 30,
     });
     this.groupSession = new GroupChatSessionManager({
-      ...groupSessionOptions,
+      conversationLimit: 20,
+      conversationTtlMs: 8 * 60 * 60 * 1000,
+      summaryFlushMessageCount: 15,
+      summaryFlushIdleMs: 30 * 60 * 1000,
+      episodeIdleMs: 12 * 60 * 60 * 1000,
+      episodeMessageCountLimit: 30,
     });
   }
 
@@ -223,6 +217,8 @@ export class LLMManager {
         tools: {
           todayEventSearch: todayEventSearchTool,
           diarySearch: diarySearchTool,
+          listPersonMemories: listPersonMemoriesTool,
+          getPersonMemory: getPersonMemoryTool,
           queryStateTool: queryStateTool,
           queryWorldMap: queryWorldMapTool,
         },
@@ -286,6 +282,8 @@ export class LLMManager {
       tools: {
         todayEventSearch: todayEventSearchTool,
         diarySearch: diarySearchTool,
+        listPersonMemories: listPersonMemoriesTool,
+        getPersonMemory: getPersonMemoryTool,
         queryStateTool: queryStateTool,
         queryWorldMap: queryWorldMapTool,
       },

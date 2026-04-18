@@ -24,6 +24,7 @@ export interface ResolvedReplyMessage {
   messageId: number;
   messageType: "private" | "group";
   speaker: string;
+  speakerUserId: number;
   time: number;
   rawMessage: string;
   message: EnhancedMessageSegment[];
@@ -651,6 +652,7 @@ async function buildResolvedReplyMessage(
       message.sender.card?.trim() ||
       message.sender.nickname?.trim() ||
       String(message.sender.user_id),
+    speakerUserId: message.sender.user_id,
     time: message.time,
     rawMessage: message.raw_message,
     message: storedMessage,

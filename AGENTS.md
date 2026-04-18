@@ -104,6 +104,7 @@ pnpm run stop           # 使用 PM2 停止全部服务
 ### 补充规则
 
 - 涉及代码重构、抽象取舍、函数拆分、删除中间层、判断是否过度设计时，请同时参考 `docs/rules/refactor-style.md`
+- 涉及日常实现风格、字段设计、配置显式性、单一真相源、注释取舍等问题时，请同时参考 `docs/rules/implementation-style.md`
 
 ### 格式化工具
 

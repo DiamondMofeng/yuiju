@@ -13,6 +13,8 @@ import {
   chooseShopProductPrompt,
   chooseShrinePrayerPrompt,
   diarySearchTool,
+  getPersonMemoryTool,
+  listPersonMemoriesTool,
   queryWorldMapTool,
   reviewPlanChangesTool,
   strongModel,
@@ -83,6 +85,8 @@ export async function chooseActionAgent(
         tools: {
           todayEventSearch: todayEventSearchTool,
           diarySearch: diarySearchTool,
+          listPersonMemories: listPersonMemoriesTool,
+          getPersonMemory: getPersonMemoryTool,
           queryAvailableFood: queryAvailableFood(context),
           queryWorldMap: queryWorldMapTool,
           reviewPlanChanges: reviewPlanChangesTool({

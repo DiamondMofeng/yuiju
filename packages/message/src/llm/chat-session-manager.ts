@@ -16,6 +16,10 @@ import {
   type StoredProtocolMessage,
 } from "@/utils/message";
 import { buildConversationEpisode } from "../memory/episode-builder";
+import {
+  writePersonMemoryUpdatesForGroupChatWindow,
+  writePersonMemoryUpdatesForPrivateChatWindow,
+} from "../memory/person-memory";
 
 export interface SessionHistoryContext {
   /**
@@ -36,7 +40,23 @@ export interface ChatMessageInput<TMessage> {
 }
 
 export interface ChatSessionManagerOptions {
+  /**
+   * 最近原始会话历史最多保留多少条消息。
+   *
+   * 说明：
+   * - 这部分历史会进入 `getHistoryJson()`，供回复判断和回复生成读取；
+   * - 超过上限后只保留最新的 N 条；
+   * - 不影响滚动摘要和 episode 窗口的切分边界。
+   */
   conversationLimit: number;
+  /**
+   * 最近原始会话历史最多保留多长时间范围内的消息。
+   *
+   * 说明：
+   * - 早于该时间窗口的消息会在 trim 时被丢弃；
+   * - 它和 `conversationLimit` 一起决定 `getHistoryJson()` 能看到的原始上下文；
+   * - 不影响滚动摘要和 episode 窗口的切分边界。
+   */
   conversationTtlMs: number;
   /**
    * 滚动摘要块累计达到该消息数后立即刷新。
@@ -50,6 +70,15 @@ export interface ChatSessionManagerOptions {
    * 自然对话段静默多久后视为 episode 结束。
    */
   episodeIdleMs: number;
+  /**
+   * 单个 episode 最多允许累计多少条消息。
+   *
+   * 说明：
+   * - 达到上限后会立即归档当前窗口；
+   * - 触发上限的那条消息仍归入当前窗口；
+   * - 不影响滚动摘要刷新节奏。
+   */
+  episodeMessageCountLimit: number;
 }
 
 /**
@@ -86,7 +115,7 @@ export interface RollingSummaryChunkState<TMessage> {
  *
  * 说明：
  * - 只用于 memory episode 归档；
- * - 只按较长静默时间切窗，不受摘要刷新节奏影响。
+ * - 只按较长静默时间或消息数量上限切窗，不受摘要刷新节奏影响。
  */
 export interface EpisodeWindowState<TMessage> {
   sessionLabel: string;
@@ -120,6 +149,7 @@ export class BaseChatSessionManager<
   private summaryFlushMessageCount: number;
   private summaryFlushIdleMs: number;
   private episodeIdleMs: number;
+  private episodeMessageCountLimit: number;
   private isDev: boolean;
   private sceneLabel: string;
 
@@ -132,6 +162,7 @@ export class BaseChatSessionManager<
     this.summaryFlushMessageCount = options.summaryFlushMessageCount;
     this.summaryFlushIdleMs = options.summaryFlushIdleMs;
     this.episodeIdleMs = options.episodeIdleMs;
+    this.episodeMessageCountLimit = options.episodeMessageCountLimit;
     this.sceneLabel = sceneLabel;
     this.isDev = isDev();
   }
@@ -230,7 +261,8 @@ export class BaseChatSessionManager<
    * 维护 memory episode 的自然对话段。
    *
    * 说明：
-   * - 只按较长静默时间切窗；
+   * - 静默超过阈值时，旧窗口先归档，再用当前消息开启新窗口；
+   * - 达到消息数上限时，当前窗口立即归档；
    * - 摘要刷新不会影响 episode 的窗口边界。
    */
   private appendEpisodeMessage(input: ChatMessageInput<TMessage>) {
@@ -258,6 +290,13 @@ export class BaseChatSessionManager<
 
     currentState.lastTsMs = messageTimeMs;
     currentState.messages.push(input.message);
+
+    if (currentState.messages.length < this.episodeMessageCountLimit) {
+      return;
+    }
+
+    this.episodeStateBySessionId.delete(input.sessionId);
+    void this.finalizeEpisodeWindow(currentState);
   }
 
   private createSummaryChunkState(
@@ -378,7 +417,25 @@ export class BaseChatSessionManager<
       isDev: input.isDev,
     });
 
-    await emitMemoryEpisode(episode);
+    await Promise.all([
+      emitMemoryEpisode(episode),
+      this.writePersonMemoryUpdatesForChatWindow(input.state).catch((error) => {
+        console.error(`Failed to update ${this.sceneLabel} person memory:`, error);
+      }),
+    ]);
+  }
+
+  private async writePersonMemoryUpdatesForChatWindow(state: EpisodeWindowState<TMessage>) {
+    if (this.sceneLabel === "private") {
+      await writePersonMemoryUpdatesForPrivateChatWindow(
+        state as EpisodeWindowState<StoredPrivateMessage>,
+      );
+      return;
+    }
+
+    await writePersonMemoryUpdatesForGroupChatWindow(
+      state as EpisodeWindowState<StoredGroupMessage>,
+    );
   }
 
   /**
