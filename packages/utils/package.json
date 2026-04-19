@@ -6,7 +6,8 @@
   "main": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./env": "./src/env.ts"
+    "./env": "./src/env.ts",
+    "./world-map": "./src/prompt/world-map.ts"
   },
   "scripts": {
     "type-check": "tsc --noEmit"

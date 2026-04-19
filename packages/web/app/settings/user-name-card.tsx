@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
 const STORAGE_KEY = "yuiju:user_name";
-const DEFAULT_USER_NAME = "渺小久";
+const DEFAULT_USER_NAME = "翊小久";
 
 export function UserNameCard() {
   const [userName, setUserName] = useState(DEFAULT_USER_NAME);

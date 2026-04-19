@@ -30,7 +30,7 @@ type PersistedHomeMessage = {
 };
 
 const USER_NAME_KEY = "yuiju:user_name";
-const DEFAULT_USER_NAME = "渺小久";
+const DEFAULT_USER_NAME = "翊小久";
 const HISTORY_KEY_PREFIX = "yuiju:chat_history:";
 const HISTORY_LIMIT = 20;
 
@@ -148,25 +148,39 @@ export function HomePageHeader({ summary }: HomePageHeaderProps) {
         return { didTrim: false, next: [] as HomeUIMessage[] };
       }
 
-      const serializedMessages = serializeMessages(nextMessages);
-      const limitedMessages = serializedMessages.slice(-HISTORY_LIMIT);
-      let finalMessages = limitedMessages;
-      let didTrim = nextMessages.length > limitedMessages.length;
+      const sanitizedMessages: HomeUIMessage[] = nextMessages
+        .filter((item) => item && (item.role === "user" || item.role === "assistant"))
+        .map((item) => ({
+          id: item.id,
+          role: item.role,
+          metadata: item.metadata?.createdAt ? { createdAt: item.metadata.createdAt } : undefined,
+          parts: item.parts.filter(isTextUIPart),
+        }));
+
+      const limitedMessages = sanitizedMessages.slice(-HISTORY_LIMIT);
+      let finalMessages: HomeUIMessage[] = limitedMessages;
+      let didTrim = sanitizedMessages.length > limitedMessages.length;
 
       try {
-        const serialized = JSON.stringify(limitedMessages);
+        const serialized = JSON.stringify(serializeMessages(limitedMessages));
         if (serialized.length > 5120) {
           console.warn("Message data too large, truncating further");
           finalMessages = limitedMessages.slice(-Math.floor(HISTORY_LIMIT / 2));
           didTrim = true;
         }
-        localStorage.setItem(getHistoryKey(userName), JSON.stringify(finalMessages));
+        localStorage.setItem(
+          getHistoryKey(userName),
+          JSON.stringify(serializeMessages(finalMessages)),
+        );
       } catch (error) {
         console.error("Failed to persist messages:", error);
         finalMessages = limitedMessages.slice(-3);
         didTrim = true;
         try {
-          localStorage.setItem(getHistoryKey(userName), JSON.stringify(finalMessages));
+          localStorage.setItem(
+            getHistoryKey(userName),
+            JSON.stringify(serializeMessages(finalMessages)),
+          );
         } catch (e) {
           console.error("Emergency persistence failed:", e);
         }
@@ -174,7 +188,7 @@ export function HomePageHeader({ summary }: HomePageHeaderProps) {
 
       return {
         didTrim,
-        next: finalMessages.map((message) => createHomeMessage(message)),
+        next: finalMessages,
       };
     },
     [userName],
@@ -296,7 +310,7 @@ export function HomePageHeader({ summary }: HomePageHeaderProps) {
         <div className="fixed inset-0 bg-[rgba(15,22,30,0.35)] grid items-stretch justify-items-end z-40">
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             className="absolute inset-0 h-auto w-auto p-0 bg-transparent hover:bg-transparent"
             aria-label="关闭聊天抽屉"
             onClick={() => setIsChatOpen(false)}

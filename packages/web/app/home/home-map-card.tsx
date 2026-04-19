@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import useSWR from "swr";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,31 +12,131 @@ type HomeMapCardProps = {
   location?: string;
 };
 
-type MapNode = {
+type MapPlace = {
+  id: string;
   name: string;
-  left: string;
-  top: string;
-  tag: string;
-  desc: string;
-  detail: string;
-  actions: string[];
 };
 
-const mapNodes: MapNode[] = [];
+type MapLink = {
+  from: string;
+  to: string;
+  timeMinutes: number;
+  stamina: number;
+  satiety?: number;
+  dir: string;
+};
+
+type HomeMapResponse = {
+  code: number;
+  message: string;
+  data?: {
+    places?: MapPlace[];
+    links?: MapLink[];
+    terminalUi?: string;
+  };
+};
+
+type MapNode = {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+};
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function buildMapNodes(places: MapPlace[], terminalUi?: string): MapNode[] {
+  if (places.length === 0) {
+    return [];
+  }
+
+  const lines = (terminalUi ?? "").split("\n");
+  const maxLineLength = lines.reduce((max, line) => Math.max(max, line.length), 1);
+
+  const nodesFromUi = places
+    .map((place) => {
+      const lineIndex = lines.findIndex((line) => line.includes(place.name));
+      if (lineIndex < 0) return null;
+
+      const columnIndex = lines[lineIndex].indexOf(place.name);
+      const x = clamp((columnIndex / Math.max(1, maxLineLength - 1)) * 80 + 10, 10, 92);
+      const y = clamp((lineIndex / Math.max(1, lines.length - 1)) * 76 + 12, 12, 90);
+
+      return {
+        id: place.id,
+        name: place.name,
+        x,
+        y,
+      } satisfies MapNode;
+    })
+    .filter((node): node is MapNode => node !== null);
+
+  if (nodesFromUi.length === places.length) {
+    return nodesFromUi;
+  }
+
+  const existingIds = new Set(nodesFromUi.map((node) => node.id));
+  const missingPlaces = places.filter((place) => !existingIds.has(place.id));
+
+  const fallbackNodes = missingPlaces.map((place, index) => {
+    const angle = (Math.PI * 2 * index) / Math.max(1, missingPlaces.length);
+    return {
+      id: place.id,
+      name: place.name,
+      x: 50 + Math.cos(angle) * 30,
+      y: 50 + Math.sin(angle) * 28,
+    } satisfies MapNode;
+  });
+
+  return [...nodesFromUi, ...fallbackNodes];
+}
 
 export function HomeMapCard({ location }: HomeMapCardProps) {
   const currentLocation = location ?? "";
-  const [selectedName, setSelectedName] = useState(currentLocation);
+  const [selectedId, setSelectedId] = useState<string>("");
   const [isZoomOpen, setIsZoomOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+
+  const { data } = useSWR("/api/nodejs/home/map", async () => {
+    const response = await fetch("/api/nodejs/home/map", { cache: "no-store" });
+    if (!response.ok) {
+      return undefined;
+    }
+    const payload = (await response.json()) as HomeMapResponse;
+    return payload.data;
+  });
+
+  const places = data?.places ?? [];
+  const links = data?.links ?? [];
+  const mapNodes = useMemo(
+    () => buildMapNodes(places, data?.terminalUi),
+    [places, data?.terminalUi],
+  );
   const hasMapNodes = mapNodes.length > 0;
+
+  const nodeById = useMemo(() => {
+    return new Map(mapNodes.map((node) => [node.id, node]));
+  }, [mapNodes]);
+
+  const nodeByName = useMemo(() => {
+    return new Map(mapNodes.map((node) => [node.name, node]));
+  }, [mapNodes]);
 
   useEffect(() => {
     if (!hasMapNodes) return;
-    if (!mapNodes.some((node) => node.name === selectedName)) {
-      setSelectedName(currentLocation);
+
+    const currentNode = nodeByName.get(currentLocation);
+    if (currentNode) {
+      setSelectedId((prev) => prev || currentNode.id);
+      return;
     }
-  }, [currentLocation, hasMapNodes, selectedName]);
+
+    if (!nodeById.has(selectedId)) {
+      setSelectedId(mapNodes[0]?.id ?? "");
+    }
+  }, [currentLocation, hasMapNodes, mapNodes, nodeById, nodeByName, selectedId]);
 
   useEffect(() => {
     if (!isZoomOpen) return;
@@ -61,12 +162,38 @@ export function HomeMapCard({ location }: HomeMapCardProps) {
 
   const selectedNode = useMemo(() => {
     if (!hasMapNodes) return undefined;
-    return (
-      mapNodes.find((node) => node.name === selectedName) ??
-      mapNodes.find((node) => node.name === currentLocation) ??
-      mapNodes[0]
-    );
-  }, [currentLocation, hasMapNodes, selectedName]);
+
+    return nodeById.get(selectedId) ?? nodeByName.get(currentLocation) ?? mapNodes[0];
+  }, [currentLocation, hasMapNodes, mapNodes, nodeById, nodeByName, selectedId]);
+
+  const mapEdges = useMemo(() => {
+    const allEdges = links
+      .map((link) => {
+        const from = nodeById.get(link.from);
+        const to = nodeById.get(link.to);
+        if (!from || !to) return null;
+
+        const key = [link.from, link.to].sort().join("-");
+        return { key, from, to };
+      })
+      .filter((edge): edge is { key: string; from: MapNode; to: MapNode } => edge !== null);
+
+    return allEdges.filter((edge, index, list) => {
+      return list.findIndex((item) => item.key === edge.key) === index;
+    });
+  }, [links, nodeById]);
+
+  const selectedConnections = useMemo(() => {
+    if (!selectedNode) return [];
+
+    return links
+      .filter((link) => link.from === selectedNode.id || link.to === selectedNode.id)
+      .map((link) => {
+        const targetId = link.from === selectedNode.id ? link.to : link.from;
+        const targetName = nodeById.get(targetId)?.name ?? targetId;
+        return `${targetName} · ${link.timeMinutes}分钟`;
+      });
+  }, [links, nodeById, selectedNode]);
 
   const mapStage = (variant: "default" | "zoom") => {
     if (!hasMapNodes) {
@@ -97,49 +224,33 @@ export function HomeMapCard({ location }: HomeMapCardProps) {
         <svg
           className="absolute inset-0 h-full w-full z-1 pointer-events-none"
           viewBox="0 0 100 100"
-          preserveAspectRatio="none"
         >
           <title>地图连线</title>
-          <line
-            x1="22"
-            y1="62"
-            x2="55"
-            y2="48"
-            stroke="rgba(145,196,238,0.9)"
-            strokeWidth={2.4}
-            strokeLinecap="round"
-          />
-          <line
-            x1="55"
-            y1="48"
-            x2="78"
-            y2="68"
-            stroke="rgba(145,196,238,0.9)"
-            strokeWidth={2.4}
-            strokeLinecap="round"
-          />
-          <line
-            x1="22"
-            y1="62"
-            x2="78"
-            y2="68"
-            stroke="rgba(145,196,238,0.9)"
-            strokeWidth={2.4}
-            strokeLinecap="round"
-          />
+          {mapEdges.map((edge) => (
+            <line
+              key={edge.key}
+              x1={edge.from.x}
+              y1={edge.from.y}
+              x2={edge.to.x}
+              y2={edge.to.y}
+              stroke="rgba(145,196,238,0.9)"
+              strokeWidth={2.2}
+              strokeLinecap="round"
+            />
+          ))}
         </svg>
 
         {mapNodes.map((node) => {
           const isActive = node.name === currentLocation;
-          const isSelected = node.name === selectedNode?.name;
+          const isSelected = node.id === selectedNode?.id;
           return (
             <div
-              key={node.name}
+              key={node.id}
               className={cn(
                 "absolute -translate-x-1/2 -translate-y-1/2 w-max min-w-[126px] max-w-[calc(100%-12px)] z-[2] max-[520px]:min-w-[108px]",
                 isActive && "z-5",
               )}
-              style={{ left: node.left, top: node.top }}
+              style={{ left: `${node.x}%`, top: `${node.y}%` }}
             >
               <button
                 className={cn(
@@ -152,7 +263,7 @@ export function HomeMapCard({ location }: HomeMapCardProps) {
                 )}
                 type="button"
                 onClick={() => {
-                  setSelectedName(node.name);
+                  setSelectedId(node.id);
                   setIsDetailOpen(true);
                 }}
                 aria-pressed={isSelected}
@@ -168,7 +279,7 @@ export function HomeMapCard({ location }: HomeMapCardProps) {
                       "border-[rgba(145,196,238,0.45)] bg-[rgba(145,196,238,0.2)] text-[rgba(43,47,54,0.9)]",
                   )}
                 >
-                  {isActive ? "当前" : node.tag}
+                  {isActive ? "当前" : "地点"}
                 </span>
               </button>
             </div>
@@ -227,7 +338,7 @@ export function HomeMapCard({ location }: HomeMapCardProps) {
             <header className="flex items-center justify-between gap-3 px-4 py-[14px] border-b border-[rgba(217,230,245,0.85)]">
               <div>
                 <h3 className="m-0 text-base font-black">世界地图 · 放大查看</h3>
-                <p className="mt-1 text-xs text-[#6b7480]">点击节点查看详情</p>
+                <p className="mt-1 text-xs text-[#6b7480]">点击节点查看连通信息</p>
               </div>
               <Button variant="secondary" type="button" onClick={() => setIsZoomOpen(false)}>
                 关闭
@@ -255,7 +366,7 @@ export function HomeMapCard({ location }: HomeMapCardProps) {
             <header className="flex items-center justify-between gap-3 px-4 py-[14px] border-b border-[rgba(217,230,245,0.85)] bg-[rgba(247,251,255,0.9)]">
               <div>
                 <h4 className="m-0 text-base font-black text-[#2b2f36]">{selectedNode.name}</h4>
-                <p className="mt-1 text-xs text-[#6b7480]">RPG 地图 · 地点详情</p>
+                <p className="mt-1 text-xs text-[#6b7480]">地图接口数据</p>
               </div>
               <button
                 className="w-9 h-9 rounded-xl border border-[rgba(217,230,245,0.85)] bg-white text-[#2b2f36] text-xl leading-none transition duration-150 hover:-translate-y-[1px] hover:shadow-[0_12px_22px_rgba(21,33,54,0.12)]"
@@ -267,14 +378,17 @@ export function HomeMapCard({ location }: HomeMapCardProps) {
               </button>
             </header>
             <div className="px-4 pb-[18px] pt-[14px] grid gap-[10px]">
-              <p className="m-0 text-sm text-[#2b2f36]">{selectedNode.detail}</p>
-              <p className="m-0 text-xs text-[#6b7480]">{selectedNode.desc}</p>
+              <p className="m-0 text-sm text-[#2b2f36]">可直达地点与耗时</p>
               <div className="flex flex-wrap gap-2">
-                {selectedNode.actions.map((action) => (
-                  <Badge key={action} variant="chip" size="sm">
-                    {action}
-                  </Badge>
-                ))}
+                {selectedConnections.length > 0 ? (
+                  selectedConnections.map((item) => (
+                    <Badge key={item} variant="chip" size="sm">
+                      {item}
+                    </Badge>
+                  ))
+                ) : (
+                  <span className="text-xs text-[#6b7480]">暂无路径信息</span>
+                )}
               </div>
             </div>
           </section>
