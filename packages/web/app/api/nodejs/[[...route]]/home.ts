@@ -1,5 +1,5 @@
 import { initCharacterStateData, initPlanStateData, initWorldStateData } from "@yuiju/utils";
-import { compileWorldMapDsl, worldMapDsl, worldMapTerminalUi } from "@yuiju/utils/world-map";
+import { compileWorldMapDsl, worldMapDsl, worldMapTerminalUi } from "@yuiju/utils";
 import { Hono } from "hono";
 
 export const homeRoute = new Hono();

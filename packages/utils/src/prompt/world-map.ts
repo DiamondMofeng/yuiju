@@ -109,6 +109,38 @@ export function compileWorldMapDsl(dsl: string): CompiledWorldMap {
   return { places, links };
 }
 
+/**
+ * 星见町的结构化地图数据（显式常量，便于阅读与维护）。
+ */
+export const worldMapPlaces: WorldMapPlace[] = [
+  { id: "HOME", name: MajorScene.Home },
+  { id: "SCHOOL", name: MajorScene.School },
+  { id: "SHOP", name: MajorScene.Shop },
+  { id: "CAFE", name: MajorScene.Cafe },
+  { id: "PARK", name: MajorScene.Park },
+  { id: "SHRINE", name: MajorScene.Shrine },
+  { id: "COAST", name: MajorScene.Coast },
+];
+
+export const worldMapLinks: WorldMapLink[] = [
+  { from: "HOME", to: "SCHOOL", timeMinutes: 30, stamina: -7, satiety: -4, dir: "N" },
+  { from: "SCHOOL", to: "HOME", timeMinutes: 30, stamina: -7, satiety: -4, dir: "S" },
+  { from: "HOME", to: "SHOP", timeMinutes: 20, stamina: -5, satiety: -3, dir: "NE" },
+  { from: "SHOP", to: "HOME", timeMinutes: 20, stamina: -5, satiety: -3, dir: "SW" },
+  { from: "HOME", to: "CAFE", timeMinutes: 20, stamina: -5, satiety: -3, dir: "NW" },
+  { from: "CAFE", to: "HOME", timeMinutes: 20, stamina: -3, dir: "SE" },
+  { from: "SCHOOL", to: "SHOP", timeMinutes: 10, stamina: -3, satiety: -2, dir: "E" },
+  { from: "SHOP", to: "SCHOOL", timeMinutes: 10, stamina: -3, satiety: -2, dir: "W" },
+  { from: "SCHOOL", to: "CAFE", timeMinutes: 10, stamina: -3, satiety: -2, dir: "W" },
+  { from: "CAFE", to: "SCHOOL", timeMinutes: 10, stamina: -3, dir: "E" },
+  { from: "HOME", to: "PARK", timeMinutes: 10, stamina: -2, satiety: -1, dir: "S" },
+  { from: "PARK", to: "HOME", timeMinutes: 10, stamina: -2, satiety: -1, dir: "N" },
+  { from: "PARK", to: "SHRINE", timeMinutes: 10, stamina: -2, satiety: -1, dir: "S" },
+  { from: "SHRINE", to: "PARK", timeMinutes: 10, stamina: -2, satiety: -1, dir: "N" },
+  { from: "SHOP", to: "COAST", timeMinutes: 30, stamina: -2, satiety: -1, dir: "E" },
+  { from: "COAST", to: "SHOP", timeMinutes: 30, stamina: -2, satiety: -1, dir: "W" },
+];
+
 export const worldMapDsl = `
 place HOME "${MajorScene.Home}"
 place SCHOOL "${MajorScene.School}"
@@ -135,10 +167,6 @@ link SHRINE -> PARK (timeMinutes=10, stamina=-2, satiety=-1, dir=N)
 link SHOP -> COAST (timeMinutes=30, stamina=-2, satiety=-1, dir=E)
 link COAST -> SHOP (timeMinutes=30, stamina=-2, satiety=-1, dir=W)
 `.trim();
-
-const compiledWorldMap = compileWorldMapDsl(worldMapDsl);
-export const worldMapPlaces: WorldMapPlace[] = compiledWorldMap.places;
-export const worldMapLinks: WorldMapLink[] = compiledWorldMap.links;
 
 /**
  * 给人看的，不是给 LLM 看的
