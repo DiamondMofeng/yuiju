@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { generateText, Output, stepCountIs, tool } from "ai";
 import dayjs from "dayjs";
 import { z } from "zod";
-import { getYuijuConfig, getYuijuProjectRoot } from "../config";
+import { getYuijuConfig } from "../config";
 import { deepseekProvider } from "../llm/models";
 import { buildPersonMemoryProposalPrompt, buildPersonMemoryReviewPrompt } from "../prompt";
 import { formatProjectTime } from "../time";
@@ -127,7 +127,7 @@ export class PersonMemoryFormatError extends Error {
 }
 
 export async function getPersonMemoryDirectoryPath(): Promise<string> {
-  const directoryPath = resolve(getYuijuProjectRoot(), getYuijuConfig().app.memoryDir, "people");
+  const directoryPath = resolve(getYuijuConfig().app.memoryDir, "people");
 
   try {
     const stats = await stat(directoryPath);

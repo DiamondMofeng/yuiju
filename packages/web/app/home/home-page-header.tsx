@@ -149,8 +149,8 @@ export function HomePageHeader({ summary }: HomePageHeaderProps) {
       }
 
       const sanitizedMessages: HomeUIMessage[] = nextMessages
-        .filter(item => item && (item.role === 'user' || item.role === 'assistant'))
-        .map(item => ({
+        .filter((item) => item && (item.role === "user" || item.role === "assistant"))
+        .map((item) => ({
           id: item.id,
           role: item.role,
           metadata: item.metadata?.createdAt ? { createdAt: item.metadata.createdAt } : undefined,
@@ -168,13 +168,19 @@ export function HomePageHeader({ summary }: HomePageHeaderProps) {
           finalMessages = limitedMessages.slice(-Math.floor(HISTORY_LIMIT / 2));
           didTrim = true;
         }
-        localStorage.setItem(getHistoryKey(userName), JSON.stringify(serializeMessages(finalMessages)));
+        localStorage.setItem(
+          getHistoryKey(userName),
+          JSON.stringify(serializeMessages(finalMessages)),
+        );
       } catch (error) {
         console.error("Failed to persist messages:", error);
         finalMessages = limitedMessages.slice(-3);
         didTrim = true;
         try {
-          localStorage.setItem(getHistoryKey(userName), JSON.stringify(serializeMessages(finalMessages)));
+          localStorage.setItem(
+            getHistoryKey(userName),
+            JSON.stringify(serializeMessages(finalMessages)),
+          );
         } catch (e) {
           console.error("Emergency persistence failed:", e);
         }
