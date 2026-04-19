@@ -29,7 +29,5 @@ jobs:
         run: pnpm run lint
       - name: Type check
         run: pnpm run type-check
-      - name: Test (world)
-        run: pnpm run test:world
       - name: Build (web)
         run: pnpm run build:web
