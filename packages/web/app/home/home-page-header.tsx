@@ -30,7 +30,7 @@ type PersistedHomeMessage = {
 };
 
 const USER_NAME_KEY = "yuiju:user_name";
-const DEFAULT_USER_NAME = "渺小久";
+const DEFAULT_USER_NAME = "翊小久";
 const HISTORY_KEY_PREFIX = "yuiju:chat_history:";
 const HISTORY_LIMIT = 20;
 

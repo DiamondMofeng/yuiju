@@ -1,4 +1,11 @@
-import { initCharacterStateData, initPlanStateData, initWorldStateData } from "@yuiju/utils";
+import {
+  initCharacterStateData,
+  initPlanStateData,
+  initWorldStateData,
+  worldMapLinks,
+  worldMapPlaces,
+  worldMapTerminalUi,
+} from "@yuiju/utils";
 import { Hono } from "hono";
 
 export const homeRoute = new Hono();
@@ -29,6 +36,16 @@ export interface HomeResponse {
         updatedAt?: string;
       };
     };
+  };
+}
+
+export interface HomeMapResponse {
+  code: number;
+  message: string;
+  data: {
+    places: typeof worldMapPlaces;
+    links: typeof worldMapLinks;
+    terminalUi: string;
   };
 }
 
@@ -89,4 +106,16 @@ homeRoute.get("/summary", async (context) => {
     },
     message: "ok",
   });
+});
+
+homeRoute.get("/map", async (context) => {
+  return context.json({
+    code: 0,
+    data: {
+      places: worldMapPlaces,
+      links: worldMapLinks,
+      terminalUi: worldMapTerminalUi,
+    },
+    message: "ok",
+  } satisfies HomeMapResponse);
 });
