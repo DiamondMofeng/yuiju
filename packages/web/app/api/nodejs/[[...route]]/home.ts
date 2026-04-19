@@ -1,5 +1,11 @@
-import { initCharacterStateData, initPlanStateData, initWorldStateData } from "@yuiju/utils";
-import { compileWorldMapDsl, worldMapDsl, worldMapTerminalUi } from "@yuiju/utils";
+import {
+  initCharacterStateData,
+  initPlanStateData,
+  initWorldStateData,
+  worldMapLinks,
+  worldMapPlaces,
+  worldMapTerminalUi,
+} from "@yuiju/utils";
 import { Hono } from "hono";
 
 export const homeRoute = new Hono();
@@ -37,8 +43,8 @@ export interface HomeMapResponse {
   code: number;
   message: string;
   data: {
-    places: ReturnType<typeof compileWorldMapDsl>["places"];
-    links: ReturnType<typeof compileWorldMapDsl>["links"];
+    places: typeof worldMapPlaces;
+    links: typeof worldMapLinks;
     terminalUi: string;
   };
 }
@@ -103,13 +109,11 @@ homeRoute.get("/summary", async (context) => {
 });
 
 homeRoute.get("/map", async (context) => {
-  const compiledMap = compileWorldMapDsl(worldMapDsl);
-
   return context.json({
     code: 0,
     data: {
-      places: compiledMap.places,
-      links: compiledMap.links,
+      places: worldMapPlaces,
+      links: worldMapLinks,
       terminalUi: worldMapTerminalUi,
     },
     message: "ok",

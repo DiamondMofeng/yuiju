@@ -16,101 +16,12 @@ export interface WorldMapLink {
   dir: "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW";
 }
 
-const VALID_DIRECTIONS = new Set<WorldMapLink["dir"]>(["N", "NE", "E", "SE", "S", "SW", "W", "NW"]);
-
-const PLACE_LINE_PATTERN = /^place\s+([A-Z_]+)\s+"(.+)"$/;
-const LINK_LINE_PATTERN = /^link\s+([A-Z_]+)\s+->\s+([A-Z_]+)\s+\((.+)\)$/;
-
-export interface CompiledWorldMap {
-  places: WorldMapPlace[];
-  links: WorldMapLink[];
-}
-
-function parseInteger(value: string, fieldName: string, line: string): number {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`[world-map] invalid ${fieldName} in line: ${line}`);
-  }
-  return parsed;
-}
-
 /**
- * 将 world-map DSL 编译为结构化数据。
+ * 星见町的结构化地图数据。
  *
  * 说明：
- * - 把 DSL 作为地图单一事实源，供 web / tool / prompt 复用；
- * - 编译阶段做字段与引用校验，尽量在启动时暴露配置错误。
- */
-export function compileWorldMapDsl(dsl: string): CompiledWorldMap {
-  const places: WorldMapPlace[] = [];
-  const links: WorldMapLink[] = [];
-  const placeIdSet = new Set<WorldMapPlaceId>();
-
-  const lines = dsl
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-
-  for (const line of lines) {
-    const placeMatch = line.match(PLACE_LINE_PATTERN);
-    if (placeMatch) {
-      const [, rawId, name] = placeMatch;
-      const id = rawId as WorldMapPlaceId;
-      placeIdSet.add(id);
-      places.push({ id, name });
-      continue;
-    }
-
-    const linkMatch = line.match(LINK_LINE_PATTERN);
-    if (linkMatch) {
-      const [, rawFrom, rawTo, rawDetails] = linkMatch;
-      const from = rawFrom as WorldMapPlaceId;
-      const to = rawTo as WorldMapPlaceId;
-      const details = Object.fromEntries(
-        rawDetails
-          .split(",")
-          .map((item) => item.trim())
-          .map((item) => item.split("="))
-          .map(([key, value]) => [key, value]),
-      );
-
-      const dir = details.dir as WorldMapLink["dir"];
-      if (!VALID_DIRECTIONS.has(dir)) {
-        throw new Error(`[world-map] invalid dir "${details.dir}" in line: ${line}`);
-      }
-
-      const stamina = parseInteger(details.stamina ?? "", "stamina", line);
-      const timeMinutes = parseInteger(details.timeMinutes ?? "", "timeMinutes", line);
-      const satiety =
-        typeof details.satiety === "string"
-          ? parseInteger(details.satiety, "satiety", line)
-          : undefined;
-
-      links.push({
-        from,
-        to,
-        dir,
-        stamina,
-        timeMinutes,
-        satiety,
-      });
-      continue;
-    }
-
-    throw new Error(`[world-map] unsupported DSL line: ${line}`);
-  }
-
-  for (const link of links) {
-    if (!placeIdSet.has(link.from) || !placeIdSet.has(link.to)) {
-      throw new Error(`[world-map] link references unknown place: ${link.from} -> ${link.to}`);
-    }
-  }
-
-  return { places, links };
-}
-
-/**
- * 星见町的结构化地图数据（显式常量，便于阅读与维护）。
+ * - 这里作为地图事实源，被 prompt 与 function tool 共同复用；
+ * - 行为实现中的移动时间/消耗应尽量与这里保持一致，避免模型获取到互相矛盾的地图信息。
  */
 export const worldMapPlaces: WorldMapPlace[] = [
   { id: "HOME", name: MajorScene.Home },
@@ -125,48 +36,44 @@ export const worldMapPlaces: WorldMapPlace[] = [
 export const worldMapLinks: WorldMapLink[] = [
   { from: "HOME", to: "SCHOOL", timeMinutes: 30, stamina: -7, satiety: -4, dir: "N" },
   { from: "SCHOOL", to: "HOME", timeMinutes: 30, stamina: -7, satiety: -4, dir: "S" },
+
   { from: "HOME", to: "SHOP", timeMinutes: 20, stamina: -5, satiety: -3, dir: "NE" },
   { from: "SHOP", to: "HOME", timeMinutes: 20, stamina: -5, satiety: -3, dir: "SW" },
+
   { from: "HOME", to: "CAFE", timeMinutes: 20, stamina: -5, satiety: -3, dir: "NW" },
   { from: "CAFE", to: "HOME", timeMinutes: 20, stamina: -3, dir: "SE" },
+
   { from: "SCHOOL", to: "SHOP", timeMinutes: 10, stamina: -3, satiety: -2, dir: "E" },
   { from: "SHOP", to: "SCHOOL", timeMinutes: 10, stamina: -3, satiety: -2, dir: "W" },
+
   { from: "SCHOOL", to: "CAFE", timeMinutes: 10, stamina: -3, satiety: -2, dir: "W" },
   { from: "CAFE", to: "SCHOOL", timeMinutes: 10, stamina: -3, dir: "E" },
+
   { from: "HOME", to: "PARK", timeMinutes: 10, stamina: -2, satiety: -1, dir: "S" },
   { from: "PARK", to: "HOME", timeMinutes: 10, stamina: -2, satiety: -1, dir: "N" },
+
   { from: "PARK", to: "SHRINE", timeMinutes: 10, stamina: -2, satiety: -1, dir: "S" },
   { from: "SHRINE", to: "PARK", timeMinutes: 10, stamina: -2, satiety: -1, dir: "N" },
+
+  // 月汐海岸位于小町商店正东侧，作为一条更适合放松散步的外沿路线。
   { from: "SHOP", to: "COAST", timeMinutes: 30, stamina: -2, satiety: -1, dir: "E" },
   { from: "COAST", to: "SHOP", timeMinutes: 30, stamina: -2, satiety: -1, dir: "W" },
 ];
 
-export const worldMapDsl = `
-place HOME "${MajorScene.Home}"
-place SCHOOL "${MajorScene.School}"
-place SHOP "${MajorScene.Shop}"
-place CAFE "${MajorScene.Cafe}"
-place PARK "${MajorScene.Park}"
-place SHRINE "${MajorScene.Shrine}"
-place COAST "${MajorScene.Coast}"
+export const worldMapDsl = [
+  ...worldMapPlaces.map((place) => `place ${place.id} "${place.name}"`),
+  "",
+  ...worldMapLinks.map((link) => {
+    const details = [
+      `timeMinutes=${link.timeMinutes}`,
+      `stamina=${link.stamina}`,
+      ...(link.satiety !== undefined ? [`satiety=${link.satiety}`] : []),
+      `dir=${link.dir}`,
+    ];
 
-link HOME -> SCHOOL (timeMinutes=30, stamina=-7, satiety=-4, dir=N)
-link SCHOOL -> HOME (timeMinutes=30, stamina=-7, satiety=-4, dir=S)
-link HOME -> SHOP (timeMinutes=20, stamina=-5, satiety=-3, dir=NE)
-link SHOP -> HOME (timeMinutes=20, stamina=-5, satiety=-3, dir=SW)
-link HOME -> CAFE (timeMinutes=20, stamina=-5, satiety=-3, dir=NW)
-link CAFE -> HOME (timeMinutes=20, stamina=-3, dir=SE)
-link SCHOOL -> SHOP (timeMinutes=10, stamina=-3, satiety=-2, dir=E)
-link SHOP -> SCHOOL (timeMinutes=10, stamina=-3, satiety=-2, dir=W)
-link SCHOOL -> CAFE (timeMinutes=10, stamina=-3, satiety=-2, dir=W)
-link CAFE -> SCHOOL (timeMinutes=10, stamina=-3, dir=E)
-link HOME -> PARK (timeMinutes=10, stamina=-2, satiety=-1, dir=S)
-link PARK -> HOME (timeMinutes=10, stamina=-2, satiety=-1, dir=N)
-link PARK -> SHRINE (timeMinutes=10, stamina=-2, satiety=-1, dir=S)
-link SHRINE -> PARK (timeMinutes=10, stamina=-2, satiety=-1, dir=N)
-link SHOP -> COAST (timeMinutes=30, stamina=-2, satiety=-1, dir=E)
-link COAST -> SHOP (timeMinutes=30, stamina=-2, satiety=-1, dir=W)
-`.trim();
+    return `link ${link.from} -> ${link.to} (${details.join(", ")})`;
+  }),
+].join("\n");
 
 /**
  * 给人看的，不是给 LLM 看的
