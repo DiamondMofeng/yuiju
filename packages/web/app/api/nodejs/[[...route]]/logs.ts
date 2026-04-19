@@ -210,6 +210,16 @@ const dedupeAndSortItems = (items: LogSearchItem[], limit: number) => {
     .slice(0, limit);
 };
 
+const enforceServiceFilter = (items: LogSearchItem[], service: LogService) => {
+  if (service === "all") {
+    return items;
+  }
+
+  return items.filter((item) => {
+    return item.service === service;
+  });
+};
+
 export const logsRoute = new Hono();
 
 logsRoute.use("*", async (context, next) => {
@@ -255,11 +265,12 @@ logsRoute.get("/search", async (context) => {
   }
 
   const sorted = dedupeAndSortItems(items, limit);
+  const finalItems = enforceServiceFilter(sorted, service);
 
   return context.json({
     code: 0,
     data: {
-      items: sorted,
+      items: finalItems,
       query: {
         service,
         keyword: keyword || "",
@@ -268,7 +279,7 @@ logsRoute.get("/search", async (context) => {
         endDate: context.req.query("endDate") || "",
         limit,
       },
-      total: sorted.length,
+      total: finalItems.length,
     },
     message: "ok",
   });
