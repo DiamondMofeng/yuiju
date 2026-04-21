@@ -2,11 +2,11 @@
 
 目标：把项目内的 `world + web + message` 作为**一个应用镜像**发布，并通过 `docker compose` 一键拉起。
 
-## 方案说明
+## 方案
 
 - 应用层：`Dockerfile` 构建 `yuiju:latest`，容器内用 `pm2-runtime` 同时拉起 3 个服务。
 - 基础设施层：`docker-compose.yml` 同时编排 `mongodb` 和 `redis`。
-- 配置层：统一使用 `yuiju.config.ts`，Docker 通过环境变量覆盖连接地址与密钥。
+- 配置层：统一使用 `yuiju.config.ts`，Docker 会通过环挂载境变量来覆盖容器的连接地址与密钥。
 
 ## 1) 准备统一配置文件
 
@@ -35,13 +35,13 @@ pnpm run docker:up
 pnpm run docker:up:mirror
 ```
 
-等价方式（手动指定基础镜像）：
+等价（手动指定镜像）：
 
 ```bash
 NODE_BASE_IMAGE=docker.m.daocloud.io/library/node:22-bookworm-slim docker compose up -d --build
 ```
 
-等价命令：
+等价：
 
 ```bash
 docker compose up -d --build
@@ -72,13 +72,13 @@ pnpm run docker:down
   - `docker compose restart app`
 - 构建阶段报错 `failed to fetch oauth token` 或 `TLS handshake timeout`：
   - 这通常是 Docker Hub 网络链路问题，不是项目代码问题。
-  - 先尝试：`pnpm run docker:up:mirror`
-  - 如果仍失败，再考虑配置 Docker Daemon 镜像加速或代理。
+  - 先尝试：`pnpm run docker:up:mirror`，从镜像站来拉取node内容。
+  - 如果仍失败，再考虑配置 Docker Daemon 镜像加速或挂tun代理。
 
-## 补充：为什么这样设计（工程实践）
+## 补充
 
 - `Dockerfile` 提供 `NODE_BASE_IMAGE` 构建参数，默认仍然是官方 `node:22-bookworm-slim`。
 - 在 `docker-compose.yml` 透传该参数，确保 CI、本地、不同地区网络都能复用同一份编排文件。
 - 这是一种常见的“可移植容灾”手法：业务逻辑不变，只替换拉取源，降低环境耦合。
-- 构建阶段通过 Docker `build.args` 显式注入 `YUIJU_MONGO_URI` / `YUIJU_REDIS_URL` 等变量，避免把 `localhost` 地址固化进 Next 服务端构建产物。
-- 运行阶段继续挂载 `yuiju.config.ts`，并可通过 `YUIJU_*` 环境变量覆写，做到本地与 Docker 共用一套配置结构。
+- 构建阶段通过 Docker `build.args` 显式注入 `YUIJU_MONGO_URI` / `YUIJU_REDIS_URL` 等变量，避免把 `localhost` 固化进 Next 服务端构建产物。
+- 运行阶段继续挂载 `yuiju.config.ts`，并可通过 `YUIJU_*` 环境变量覆写，做到本地与 Docker 共用一套配置结构。同时规避key暴露在构建image中。
