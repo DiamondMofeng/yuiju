@@ -7,7 +7,16 @@ services:
       dockerfile: Dockerfile
       args:
         NODE_BASE_IMAGE: ${NODE_BASE_IMAGE:-node:22-bookworm-slim}
-        YUIJU_BUILD_CONFIG_TEMPLATE: ${YUIJU_BUILD_CONFIG_TEMPLATE:-yuiju.config.docker.ts.example}
+        YUIJU_PUBLIC_DEPLOYMENT: ${YUIJU_PUBLIC_DEPLOYMENT:-0}
+        YUIJU_MEMORY_DIR: ${YUIJU_MEMORY_DIR:-~/.local/share/yuiju/memory}
+        YUIJU_MONGO_URI: ${YUIJU_MONGO_URI:-mongodb://mongodb:27017/yuiju?authSource=admin}
+        YUIJU_REDIS_URL: ${YUIJU_REDIS_URL:-redis://redis:6379}
+        YUIJU_NAPCAT_HOST: ${YUIJU_NAPCAT_HOST:-host.docker.internal}
+        YUIJU_NAPCAT_PORT: ${YUIJU_NAPCAT_PORT:-3001}
+        YUIJU_DEEPSEEK_API_KEY: ${YUIJU_DEEPSEEK_API_KEY:-xxx}
+        YUIJU_SILICONFLOW_API_KEY: ${YUIJU_SILICONFLOW_API_KEY:-xxx}
+        YUIJU_MOONSHOT_API_KEY: ${YUIJU_MOONSHOT_API_KEY:-xxx}
+        YUIJU_NAPCAT_ACCESS_TOKEN: ${YUIJU_NAPCAT_ACCESS_TOKEN:-xxx}
     image: yuiju:latest
     container_name: yuiju-app
     restart: unless-stopped
@@ -20,8 +29,19 @@ services:
       - "3010:3010"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    environment:
+      YUIJU_PUBLIC_DEPLOYMENT: ${YUIJU_PUBLIC_DEPLOYMENT:-0}
+      YUIJU_MEMORY_DIR: ${YUIJU_MEMORY_DIR:-~/.local/share/yuiju/memory}
+      YUIJU_MONGO_URI: ${YUIJU_MONGO_URI:-mongodb://mongodb:27017/yuiju?authSource=admin}
+      YUIJU_REDIS_URL: ${YUIJU_REDIS_URL:-redis://redis:6379}
+      YUIJU_NAPCAT_HOST: ${YUIJU_NAPCAT_HOST:-host.docker.internal}
+      YUIJU_NAPCAT_PORT: ${YUIJU_NAPCAT_PORT:-3001}
+      YUIJU_DEEPSEEK_API_KEY: ${YUIJU_DEEPSEEK_API_KEY:-xxx}
+      YUIJU_SILICONFLOW_API_KEY: ${YUIJU_SILICONFLOW_API_KEY:-xxx}
+      YUIJU_MOONSHOT_API_KEY: ${YUIJU_MOONSHOT_API_KEY:-xxx}
+      YUIJU_NAPCAT_ACCESS_TOKEN: ${YUIJU_NAPCAT_ACCESS_TOKEN:-xxx}
     volumes:
-      - ./yuiju.config.docker.ts:/app/yuiju.config.ts:ro
+      - ./yuiju.config.ts:/app/yuiju.config.ts:ro
       - ./packages/source/picture:/app/packages/source/picture:ro
 
   mongodb:

@@ -6,21 +6,22 @@
 
 - 应用层：`Dockerfile` 构建 `yuiju:latest`，容器内用 `pm2-runtime` 同时拉起 3 个服务。
 - 基础设施层：`docker-compose.yml` 同时编排 `mongodb` 和 `redis`。
-- 配置层：通过挂载 `yuiju.config.docker.ts` 到容器内 `/app/yuiju.config.ts`，避免把密钥写进镜像。
+- 配置层：统一使用 `yuiju.config.ts`，Docker 通过环境变量覆盖连接地址与密钥。
 
-## 1) 准备 Docker 配置文件
+## 1) 准备统一配置文件
 
 在仓库根目录执行：
 
 ```bash
-cp yuiju.config.docker.ts.example yuiju.config.docker.ts
+cp yuiju.config.ts.example yuiju.config.ts
 ```
 
-然后编辑 `yuiju.config.docker.ts`，至少确认：
+然后编辑 `yuiju.config.ts`，至少确认：
 
 - `llm.deepseekApiKey`
+- `llm.siliconflowApiKey`
 - `message.napcat.accessToken`
-- `message.napcat.host`（如果 NapCat 跑在宿主机，macOS/Windows 可保留 `host.docker.internal`）
+- `message.napcat.host`（Docker 默认通过 `YUIJU_NAPCAT_HOST` 注入为 `host.docker.internal`）
 
 ## 2) 一键启动
 
@@ -61,9 +62,9 @@ pnpm run docker:down
 ## 常见问题
 
 - `world` 报数据库连接失败：
-  - 检查 `yuiju.config.docker.ts` 中是否使用了容器服务名：
-    - `mongodb://mongodb:27017/yuiju?authSource=admin`
-    - `redis://redis:6379`
+  - 检查是否通过环境变量覆盖了错误地址：
+    - `YUIJU_MONGO_URI`
+    - `YUIJU_REDIS_URL`
 - `message` 连不上 NapCat：
   - 若 NapCat 在宿主机，确保 `message.napcat.host` 可从容器访问。
   - Linux 下通常不能直接用 `host.docker.internal`，可改成宿主机网关 IP。
@@ -79,5 +80,5 @@ pnpm run docker:down
 - `Dockerfile` 提供 `NODE_BASE_IMAGE` 构建参数，默认仍然是官方 `node:22-bookworm-slim`。
 - 在 `docker-compose.yml` 透传该参数，确保 CI、本地、不同地区网络都能复用同一份编排文件。
 - 这是一种常见的“可移植容灾”手法：业务逻辑不变，只替换拉取源，降低环境耦合。
-- 构建阶段通过 `YUIJU_BUILD_CONFIG_TEMPLATE` 使用 Docker 配置模板（默认 `yuiju.config.docker.ts.example`），避免把 `localhost` 数据库地址固化进 Next 服务端构建产物。
-- 同时忽略宿主机 `yuiju.config.ts`，避免“我本地能跑/你那边构建挂”的配置污染问题。
+- 构建阶段通过 Docker `build.args` 显式注入 `YUIJU_MONGO_URI` / `YUIJU_REDIS_URL` 等变量，避免把 `localhost` 地址固化进 Next 服务端构建产物。
+- 运行阶段继续挂载 `yuiju.config.ts`，并可通过 `YUIJU_*` 环境变量覆写，做到本地与 Docker 共用一套配置结构。

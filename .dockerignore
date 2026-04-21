@@ -14,4 +14,3 @@ Dockerfile*
 docker-compose*.yml
 *.log
 yuiju.config.ts
-yuiju.config.docker.ts
