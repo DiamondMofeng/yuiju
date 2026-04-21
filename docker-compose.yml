@@ -1,0 +1,66 @@
+name: yuiju
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NODE_BASE_IMAGE: ${NODE_BASE_IMAGE:-node:22-bookworm-slim}
+        YUIJU_BUILD_CONFIG_TEMPLATE: ${YUIJU_BUILD_CONFIG_TEMPLATE:-yuiju.config.docker.ts.example}
+    image: yuiju:latest
+    container_name: yuiju-app
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "3010:3010"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./yuiju.config.docker.ts:/app/yuiju.config.ts:ro
+      - ./packages/source/picture:/app/packages/source/picture:ro
+
+  mongodb:
+    image: mongo:7
+    container_name: yuiju-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - yuiju-mongodb-data:/data/db
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--quiet",
+          "mongodb://localhost:27017",
+          "--eval",
+          "db.adminCommand('ping').ok",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: yuiju-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - yuiju-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  yuiju-mongodb-data:
+  yuiju-redis-data:

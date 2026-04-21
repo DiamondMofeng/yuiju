@@ -151,4 +151,5 @@ packages/python/__pycache__/
 .devtools
 
 yuiju.config.ts
+yuiju.config.docker.ts
 /memory/
