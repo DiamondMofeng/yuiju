@@ -205,9 +205,7 @@ const dedupeAndSortItems = (items: LogSearchItem[], limit: number) => {
     deduped.set(`${item.service}|${item.tsNs}|${item.line}`, item);
   }
 
-  return [...deduped.values()]
-    .sort((a, b) => b.tsNs.localeCompare(a.tsNs))
-    .slice(0, limit);
+  return [...deduped.values()].sort((a, b) => b.tsNs.localeCompare(a.tsNs)).slice(0, limit);
 };
 
 const enforceServiceFilter = (items: LogSearchItem[], service: LogService) => {

@@ -1,6 +1,6 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createYuijuLogger } from "@yuiju/utils";
+import { createYuijuLogger, setYuijuLogger } from "@yuiju/utils";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 
@@ -11,6 +11,10 @@ const currentDir = dirname(fileURLToPath(import.meta.url));
  * - 保持原有日志落盘目录 `packages/world/logs` 不变；
  * - 仅复用公共格式与 transport 构建逻辑。
  */
-export const logger = createYuijuLogger({
+const logger = createYuijuLogger({
   logDir: resolve(currentDir, "../../logs"),
 });
+
+setYuijuLogger(logger);
+
+export { logger };

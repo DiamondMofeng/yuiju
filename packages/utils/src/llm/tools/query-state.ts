@@ -1,6 +1,7 @@
 import type { Tool } from "ai";
 import dayjs from "dayjs";
 import { z } from "zod";
+import { logger } from "../../logger";
 import { initCharacterStateData, initPlanStateData, initWorldStateData } from "../../redis";
 import { getTimeWithWeekday } from "../../time";
 
@@ -14,7 +15,7 @@ export const queryStateTool: Tool = {
     const planState = await initPlanStateData();
     const now = dayjs();
 
-    console.log("[工具调用]", "queryState");
+    logger.debug("[工具调用]", "queryState");
 
     return {
       currentTime: getTimeWithWeekday(now, "MM-DD HH:mm"),

@@ -6,6 +6,7 @@ import {
   getGroupReplyDecisionSystemPrompt,
   getPersonMemoryTool,
   listPersonMemoriesTool,
+  messageHistorySchemaPrompt,
   minimaxModel,
   queryStateTool,
   queryWorldMapTool,
@@ -127,11 +128,11 @@ export class LLMManager {
 
     const { output } = await generateStructuredOutput({
       model: minimaxModel,
-      // providerOptions: {
-      //   Siliconflow: {
-      //     enable_thinking: false,
-      //   },
-      // },
+      providerOptions: {
+        Siliconflow: {
+          enable_thinking: false,
+        },
+      },
       system: getGroupReplyDecisionSystemPrompt(),
       messages: [
         {
@@ -193,6 +194,7 @@ export class LLMManager {
     const systemPrompt = [
       getCharacterCardPrompt(),
       stickerState.buildPromptSection(),
+      messageHistorySchemaPrompt,
       "## 当前聊天场景",
       `你现在正在 QQ 群「${getGroupDisplayName(message)}」`,
     ].join("\n\n");
@@ -261,7 +263,11 @@ export class LLMManager {
   public async chatWithLLM(message: StoredPrivateMessage) {
     const sessionId = this.buildPrivateSessionKey(message.user_id);
     const { historyJson, summary } = await this.privateSession.getHistoryJson(sessionId);
-    const systemPrompt = [getCharacterCardPrompt(), stickerState.buildPromptSection()].join("\n\n");
+    const systemPrompt = [
+      getCharacterCardPrompt(),
+      stickerState.buildPromptSection(),
+      messageHistorySchemaPrompt,
+    ].join("\n\n");
 
     const result = await generateText({
       model: siliconflow("Pro/moonshotai/Kimi-K2.5"),

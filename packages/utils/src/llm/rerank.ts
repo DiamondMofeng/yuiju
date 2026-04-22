@@ -1,4 +1,5 @@
 import { getYuijuConfig } from "../config";
+import { logger } from "../logger";
 
 const SILICONFLOW_RERANK_ENDPOINT = "https://api.siliconflow.cn/v1/rerank";
 const SILICONFLOW_RERANK_MODEL = "Qwen/Qwen3-Reranker-8B";
@@ -34,7 +35,7 @@ export async function rerankEpisodesWithSiliconFlow<TItem extends RerankableSear
 }): Promise<TItem[] | null> {
   const apiKey = getYuijuConfig().llm.siliconflowApiKey.trim();
   if (!apiKey) {
-    console.error("[rerankEpisodesWithSiliconFlow] yuiju.config.ts 中未配置 llm.siliconflowApiKey");
+    logger.error("[rerankEpisodesWithSiliconFlow] yuiju.config.ts 中未配置 llm.siliconflowApiKey");
     return null;
   }
 
@@ -55,19 +56,19 @@ export async function rerankEpisodesWithSiliconFlow<TItem extends RerankableSear
       }),
     });
   } catch (error) {
-    console.error("[rerankEpisodesWithSiliconFlow] request failed", error);
+    logger.error("[rerankEpisodesWithSiliconFlow] request failed", error);
     return null;
   }
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");
-    console.error(`[rerankEpisodesWithSiliconFlow] rerank failed: ${response.status} ${text}`);
+    logger.error(`[rerankEpisodesWithSiliconFlow] rerank failed: ${response.status} ${text}`);
     return null;
   }
 
   const json = (await response.json()) as SiliconFlowRerankResponse;
   if (!Array.isArray(json.results)) {
-    console.error("[rerankEpisodesWithSiliconFlow] invalid response payload", json);
+    logger.error("[rerankEpisodesWithSiliconFlow] invalid response payload", json);
     return null;
   }
 

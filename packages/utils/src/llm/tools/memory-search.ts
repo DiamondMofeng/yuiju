@@ -1,5 +1,6 @@
 import type { Tool } from "ai";
 import { z } from "zod";
+import { logger } from "../../logger";
 import { searchDiaries, searchEpisodes } from "../../memory";
 
 const limitField = z.number().int().min(1).max(20).optional().describe("返回结果上限，默认 5。");
@@ -23,7 +24,7 @@ export const todayEventSearchTool: Tool = {
       topK: input.limit,
       timeSort: input.timeSort ?? "desc",
     });
-    console.log("[工具调用][todayEventSearch]", input, result);
+    logger.debug("[工具调用][todayEventSearch]", input, result);
     return result;
   },
 };
@@ -38,7 +39,7 @@ export const diarySearchTool: Tool = {
       startTime: input.startDate ? `${input.startDate} 00:00:00` : undefined,
       endTime: input.endDate ? `${input.endDate} 23:59:59` : undefined,
     });
-    console.log("[工具调用][diarySearch]", input, result);
+    logger.debug("[工具调用][diarySearch]", input, result);
     return result;
   },
 };

@@ -13,6 +13,10 @@ export interface CreateYuijuLoggerOptions {
   logDir?: string;
 }
 
+declare global {
+  var __YUIJU_LOGGER__: winston.Logger | undefined;
+}
+
 /**
  * 控制台与文件共用的文本格式。
  *
@@ -118,3 +122,36 @@ export function createYuijuLogger(options: CreateYuijuLoggerOptions = {}) {
     exitOnError: false,
   });
 }
+
+/**
+ * 注册当前宿主服务创建的 logger，供 @yuiju/utils 内部模块复用。
+ */
+export function setYuijuLogger(logger: winston.Logger) {
+  globalThis.__YUIJU_LOGGER__ = logger;
+}
+
+/**
+ * @yuiju/utils 内部使用的 logger 代理。
+ *
+ * 说明：
+ * - 实际日志实例由 world/message 等宿主服务通过 setYuijuLogger 注册；
+ * - 保持 `import { logger } from "./logger"` 的直接调用方式；
+ * - 注册前调用会抛出明确错误，避免日志悄悄丢失。
+ */
+export const logger = new Proxy({} as winston.Logger, {
+  get(_target, property) {
+    const currentLogger = globalThis.__YUIJU_LOGGER__;
+
+    if (!currentLogger) {
+      throw new Error("Yuiju logger is not initialized. Call setYuijuLogger(logger) first.");
+    }
+
+    const value = Reflect.get(currentLogger, property);
+
+    if (typeof value === "function") {
+      return value.bind(currentLogger);
+    }
+
+    return value;
+  },
+});

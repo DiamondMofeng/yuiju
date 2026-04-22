@@ -6,6 +6,7 @@ import { z } from "zod";
 import { getYuijuConfig } from "../config";
 import { generateStructuredOutput } from "../llm";
 import { qwen3Model } from "../llm/models";
+import { logger } from "../logger";
 import { buildPersonMemoryProposalPrompt, buildPersonMemoryReviewPrompt } from "../prompt";
 import { formatProjectTime } from "../time";
 
@@ -220,7 +221,7 @@ export async function listPersonMemories(): Promise<PersonMemoryDirectoryItem[]>
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.warn(`[person-memory] 跳过非法人物记忆文件 ${filename}: ${message}`);
+      logger.warn(`[person-memory] 跳过非法人物记忆文件 ${filename}: ${message}`);
     }
   }
 
@@ -284,6 +285,8 @@ export async function updatePersonMemory(
     interactionMaterial: input.interactionMaterial,
     existingMemory: existingMemory ?? undefined,
   });
+
+  // TODO 记录日志
 
   if (!proposal) {
     return {
@@ -380,7 +383,7 @@ function reviewPersonMemoryProposalTool(input: Omit<PersonMemoryReviewContext, "
 
       const issues = output.issues?.map((item) => item.trim()).filter((item) => item.length > 0);
 
-      console.log("[person-memory] review", proposal, output);
+      logger.debug("[person-memory] review", proposal, output);
 
       return {
         approved: output.approved,

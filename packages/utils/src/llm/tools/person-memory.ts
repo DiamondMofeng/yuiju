@@ -1,5 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { logger } from "../../logger";
 import { getPersonMemory, listPersonMemories } from "../../memory";
 
 export const listPersonMemoriesTool = tool({
@@ -7,7 +8,7 @@ export const listPersonMemoriesTool = tool({
   inputSchema: z.object({}),
   execute: async () => {
     const items = await listPersonMemories();
-    console.log("[工具调用]", "listPersonMemories", {
+    logger.debug("[工具调用]", "listPersonMemories", {
       count: items.length,
     });
 
@@ -22,7 +23,7 @@ export const getPersonMemoryTool = tool({
   }),
   execute: async ({ personId }) => {
     const result = await getPersonMemory(personId);
-    console.log("[工具调用]", "getPersonMemory", {
+    logger.debug("[工具调用]", "getPersonMemory", {
       personId,
       found: Boolean(result),
     });
