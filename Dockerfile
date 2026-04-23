@@ -45,7 +45,7 @@ ENV YUIJU_SILICONFLOW_API_KEY=${YUIJU_SILICONFLOW_API_KEY}
 ENV YUIJU_MOONSHOT_API_KEY=${YUIJU_MOONSHOT_API_KEY}
 ENV YUIJU_NAPCAT_ACCESS_TOKEN=${YUIJU_NAPCAT_ACCESS_TOKEN}
 
-RUN cp yuiju.config.ts.example yuiju.config.ts && pnpm run build:web
+RUN cp yuiju.config.ts.example yuiju.config.ts
 
 FROM base AS runner
 
@@ -55,4 +55,4 @@ COPY --from=build /app /app
 
 EXPOSE 3010
 
-CMD ["pnpm", "exec", "pm2-runtime", "ecosystem.docker.config.js"]
+CMD ["pnpm", "exec", "pm2-runtime", "ecosystem.config.js"]

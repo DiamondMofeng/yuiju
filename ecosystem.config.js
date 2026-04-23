@@ -26,7 +26,7 @@ module.exports = {
     },
     {
       name: "yuiju-web",
-      script: "pnpm run build:web && pnpm run start:web",
+      script: "pnpm run start:web",
       cwd: __dirname,
       env: {
         NODE_ENV: "production",

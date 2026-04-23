@@ -2,25 +2,25 @@ import { defineYuijuConfig } from "./packages/utils/src/config/config-schema";
 
 const config = defineYuijuConfig({
   app: {
-    publicDeployment: process.env.YUIJU_PUBLIC_DEPLOYMENT === "1",
+    publicDeployment: false,
     timezone: "Asia/Shanghai",
-    memoryDir: process.env.YUIJU_MEMORY_DIR ?? "~/.local/share/yuiju/memory",
+    memoryDir: "~/.local/share/yuiju/memory",
   },
   database: {
-    mongoUri: process.env.YUIJU_MONGO_URI ?? "mongodb://localhost:27017/yuiju?authSource=admin",
-    redisUrl: process.env.YUIJU_REDIS_URL ?? "redis://localhost:6379",
+    mongoUri: "mongodb://localhost:27017/yuiju?authSource=admin",
+    redisUrl: "redis://localhost:6379",
   },
   llm: {
-    deepseekApiKey: process.env.YUIJU_DEEPSEEK_API_KEY ?? "xxx",
-    siliconflowApiKey: process.env.YUIJU_SILICONFLOW_API_KEY ?? "xxx",
-    moonshotApiKey: process.env.YUIJU_MOONSHOT_API_KEY ?? "xxx",
+    deepseekApiKey: "xxx",
+    siliconflowApiKey: "xxx",
+    moonshotApiKey: "xxx",
   },
   message: {
     napcat: {
       protocol: "ws",
-      host: process.env.YUIJU_NAPCAT_HOST ?? "localhost",
-      port: Number.parseInt(process.env.YUIJU_NAPCAT_PORT ?? "3001", 10),
-      accessToken: process.env.YUIJU_NAPCAT_ACCESS_TOKEN ?? "xxx",
+      host: "localhost",
+      port: 3001,
+      accessToken: "xxx",
       reconnection: {
         enable: true,
         attempts: 10,
