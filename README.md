@@ -23,6 +23,7 @@
 # Get Started
 
 [部署文档](./docs/get-started.md)
+[Docker 一键部署（单镜像）](./docs/docker-one-click.md)
 
 # Architecture
 
