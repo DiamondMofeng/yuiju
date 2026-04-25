@@ -1,3 +1,4 @@
+import { initPlanStateData, savePlanStateData } from "../../redis";
 import type {
   AgentPlanChange,
   PlanApplyResult,
@@ -5,8 +6,7 @@ import type {
   PlanItem,
   PlanScope,
   PlanState,
-} from "@yuiju/utils";
-import { initPlanStateData, savePlanStateData } from "@yuiju/utils";
+} from "../../types";
 
 function createStablePlanId(scope: PlanScope, plan: string): string {
   const raw = `${scope}:${plan}`;

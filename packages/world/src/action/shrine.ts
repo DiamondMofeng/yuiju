@@ -1,6 +1,5 @@
-import { ActionId, type ActionMetadata, allTrue, MajorScene } from "@yuiju/utils";
+import { ActionId, type ActionMetadata, allTrue, MajorScene, planManager } from "@yuiju/utils";
 import { chooseShrinePrayerAgent } from "@/llm/agent";
-import { planManager } from "@/plan";
 import { isNight } from "./utils";
 
 const SHRINE_OFFERING_COST = 5;

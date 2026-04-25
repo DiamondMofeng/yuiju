@@ -7,9 +7,9 @@ import {
   type CafeCoffeeName,
   type ChoiceOption,
   MajorScene,
+  planManager,
 } from "@yuiju/utils";
 import { chooseCafeCoffeeAgent } from "@/llm/agent";
-import { planManager } from "@/plan";
 import { logger } from "@/utils/logger";
 import { buildFoodMetadata } from "../utils/food-utils";
 

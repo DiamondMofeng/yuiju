@@ -4,11 +4,11 @@ import {
   allTrue,
   type ChoiceOption,
   MajorScene,
+  planManager,
   SHOP_PRODUCTS,
   type ShopProduct,
 } from "@yuiju/utils";
 import { chooseShopProductAgent } from "@/llm/agent";
-import { planManager } from "@/plan";
 import { logger } from "@/utils/logger";
 import { buildFoodMetadata } from "../utils/food-utils";
 
