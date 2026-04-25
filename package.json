@@ -8,6 +8,8 @@
   "scripts": {
     "lint": "biome lint . --diagnostic-level=error",
     "format:write": "biome format . --write",
+    "prepare": "husky",
+    "lint-staged": "lint-staged",
     "demo:message": "pnpm --filter @yuiju/message run demo",
     "demo:world": "pnpm --filter @yuiju/world run demo",
     "stop": "pm2 stop ecosystem.config.js",
@@ -38,6 +40,9 @@
     "type-check:utils": "pnpm --filter @yuiju/utils run type-check",
     "type-check": "pnpm run type-check:world && pnpm run type-check:message && pnpm run type-check:utils"
   },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,json,jsonc,css,md}": "biome check --write --no-errors-on-unmatched"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/yixiaojiu/yuiju.git"
@@ -53,6 +58,8 @@
     "@biomejs/biome": "^2.3.5",
     "@types/lodash-es": "^4.17.12",
     "@types/node": "^24.10.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "pm2": "^6.0.14",
     "tsconfig-paths": "^4.2.0",
     "tsx": "^4.20.6",
