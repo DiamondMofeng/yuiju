@@ -131,13 +131,6 @@ export function ActivityTimelineCard({
       <div className="p-3.5 grid gap-3">
         <div className="flex items-center justify-between gap-3">
           <h3 className="m-0 text-[14px] font-black">动态时间线</h3>
-          <Badge
-            variant="soft"
-            size="sm"
-            className="border-[rgba(175,122,197,0.25)] bg-[rgba(175,122,197,0.12)] text-[#2b2f36]"
-          >
-            MemoryEpisode 派生
-          </Badge>
         </div>
 
         <div className="grid grid-cols-4 gap-2.5 max-[760px]:grid-cols-2 max-[520px]:grid-cols-1">

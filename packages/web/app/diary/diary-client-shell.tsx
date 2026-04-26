@@ -6,7 +6,6 @@ import useSWR from "swr";
 import { DiaryFilterCard } from "./diary-filter-card";
 import { DiaryListCard } from "./diary-list-card";
 import { type DiaryResponsePayload } from "./diary-data";
-import { DiaryPageHeader } from "./diary-page-header";
 
 const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 10;
@@ -29,19 +28,6 @@ const parseCurrentPage = (value: string | null) => {
   const parsed = Number.parseInt(value ?? "", 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_PAGE;
   return parsed;
-};
-
-const buildRangeLabel = (startDate?: string, endDate?: string) => {
-  if (startDate && endDate) {
-    return `${startDate} 至 ${endDate}`;
-  }
-  if (startDate) {
-    return `${startDate} 起`;
-  }
-  if (endDate) {
-    return `截至 ${endDate}`;
-  }
-  return "全部时间";
 };
 
 /**
@@ -82,18 +68,6 @@ export function DiaryClientShell() {
   }, [currentEndDate, currentPage, currentStartDate]);
 
   const { data, error, isLoading } = useSWR(apiPath, fetchDiaryPayload);
-
-  const rangeLabel = useMemo(() => {
-    return buildRangeLabel(
-      data?.data?.filters?.startDate ?? (currentStartDate || undefined),
-      data?.data?.filters?.endDate ?? (currentEndDate || undefined),
-    );
-  }, [
-    currentEndDate,
-    currentStartDate,
-    data?.data?.filters?.endDate,
-    data?.data?.filters?.startDate,
-  ]);
 
   const updateQuery = (next: { page?: number; startDate?: string; endDate?: string }) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -149,8 +123,7 @@ export function DiaryClientShell() {
 
   return (
     <>
-      <DiaryPageHeader total={data?.data?.pagination?.total} rangeLabel={rangeLabel} />
-      <div className="grid gap-[14px]">
+      <div className="grid gap-[14px] mt-4.5">
         <DiaryFilterCard
           startDate={startDate}
           endDate={endDate}

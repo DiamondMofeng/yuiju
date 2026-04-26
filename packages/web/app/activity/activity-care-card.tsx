@@ -101,13 +101,6 @@ export function ActivityCareCard() {
       <div className="p-[14px] grid gap-[14px]">
         <div className="flex items-center justify-between gap-3">
           <h3 className="m-0 text-[14px] font-black">轻管理 · 零花钱</h3>
-          <Badge
-            variant="soft"
-            size="sm"
-            className="border-[rgba(250,227,190,0.75)] bg-[rgba(250,227,190,0.55)] text-[#2b2f36]"
-          >
-            Care
-          </Badge>
         </div>
 
         <p className="m-0 text-[13px] text-[#6b7480] leading-[1.5]">
@@ -166,16 +159,7 @@ export function ActivityCareCard() {
           >
             {status.message}
           </Badge>
-        ) : (
-          <Badge
-            variant="pill"
-            size="sm"
-            className="border-[rgba(217,230,245,0.9)] bg-[rgba(247,251,255,0.9)] text-[#6b7480]"
-          >
-            <span>提示</span>&nbsp;<strong className="text-[#2b2f36]">发放</strong>&nbsp;
-            <span>更像"给零花钱"</span>
-          </Badge>
-        )}
+        ) : null}
       </div>
     </Card>
   );
