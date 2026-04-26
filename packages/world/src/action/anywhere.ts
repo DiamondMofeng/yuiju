@@ -5,9 +5,9 @@ import {
   type ChoiceOption,
   allTrue,
   type FoodMetadata,
+  planManager,
 } from "@yuiju/utils";
 import { chooseFoodAgent } from "@/llm/agent";
-import { planManager } from "@/plan";
 import { logger } from "@/utils/logger";
 import { resolveFoodRecoveryPerUnit } from "../utils/food-utils";
 import { notDoneToday } from "./utils";

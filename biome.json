@@ -43,6 +43,7 @@
       "!!**/.venv",
       "!!**/logs",
       "!!**/.next",
+      "!!apps/site/.vitepress",
       "!!packages/source/dataset/opensource"
     ]
   }

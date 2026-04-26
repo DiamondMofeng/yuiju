@@ -1,4 +1,4 @@
-import { planManager } from "@/plan";
+import { planManager } from "@yuiju/utils";
 import { characterState } from "./character-state";
 import { worldState } from "./world-state";
 

@@ -104,7 +104,7 @@ pnpm run stop           # 使用 PM2 停止全部服务
 ### 补充规则
 
 - 涉及代码重构、抽象取舍、函数拆分、删除中间层、判断是否过度设计时，请同时参考 `docs/rules/refactor-style.md`
-- 涉及日常实现风格、字段设计、配置显式性、单一真相源、注释取舍等问题时，请同时参考 `docs/rules/implementation-style.md`
+- 项目代码规范，参考 `docs/rules/implementation-style.md`
 
 ### 格式化工具
 
@@ -139,7 +139,6 @@ cp yuiju.config.ts.example yuiju.config.ts
 额外说明：
 
 - `NODE_ENV` 仍然是运行时环境变量，不放在 `yuiju.config.ts` 中
-- 根目录 `package.json` 未声明 `pm2` 依赖，执行 `pnpm run start` 前需要系统中已有可用 `pm2` 命令
 
 ## 关键架构概念
 
@@ -164,7 +163,6 @@ cp yuiju.config.ts.example yuiju.config.ts
 
 - **Redis**：角色状态的实时缓存（唯一真相源）
 - **MongoDB**：行为历史记录存储
-- **内存状态**：Redis 数据的缓存，定期同步
 
 ## 开发工作流程
 
@@ -179,5 +177,5 @@ cp yuiju.config.ts.example yuiju.config.ts
 
 1. **Redis 依赖**：开发过程中需要运行 Redis 服务器
 2. **MongoDB 依赖**：需要运行 MongoDB 服务器
-3. **LLM API 依赖**：需要配置有效的 DeepSeek API 密钥
+3. **LLM API 依赖**：需要配置有效的 LLM API 密钥
 4. 当前项目处于早期开发阶段，在进行技术方案设计时，请不用考虑历史逻辑的兼容性，按照最佳方案设计。

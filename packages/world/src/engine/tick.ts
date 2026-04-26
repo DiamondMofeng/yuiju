@@ -2,9 +2,11 @@ import {
   type ActionAgentDecision,
   type ActionContext,
   ActionId,
+  buildPlanUpdateEpisodes,
   emitMemoryEpisode,
   getRecentMemoryEpisodes,
   isDev,
+  planManager,
   type PlanChange,
   type RunningActionState,
   SUBJECT_NAME,
@@ -12,8 +14,7 @@ import {
 import { getActionList } from "@/action";
 import { getActionById } from "@/action/utils";
 import { chooseActionAgent } from "@/llm/agent";
-import { buildBehaviorEpisode, buildPlanUpdateEpisodes } from "@/memory/episode-builder";
-import { planManager } from "@/plan";
+import { buildBehaviorEpisode } from "@/memory/episode-builder";
 import { characterState } from "@/state/character-state";
 import { worldState } from "@/state/world-state";
 import { logger } from "@/utils/logger";
