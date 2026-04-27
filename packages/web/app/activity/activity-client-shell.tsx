@@ -3,10 +3,9 @@
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
-import type { ActivityItem, ActivityResponsePayload } from "./activity-data";
+import type { ActivityResponsePayload } from "./activity-data";
 import { ActivityCareCard } from "./activity-care-card";
 import { ActivityDetailPreviewCard } from "./activity-detail-preview-card";
-import { ActivityPageHeader } from "./activity-page-header";
 import { ActivityTimelineCard } from "./activity-timeline-card";
 
 const DEFAULT_PAGE = 1;
@@ -82,8 +81,7 @@ export function ActivityClientShell() {
 
   return (
     <>
-      <ActivityPageHeader count={pagination?.total} />
-      <div className="grid grid-cols-[1fr_360px] max-[1020px]:grid-cols-1 gap-[14px] items-start">
+      <div className="grid grid-cols-[1fr_360px] max-[1020px]:grid-cols-1 gap-[14px] items-start mt-4.5">
         <ActivityTimelineCard
           events={events}
           isLoading={isBusy}
