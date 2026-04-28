@@ -1,11 +1,13 @@
 import { SUBJECT_NAME } from "../../constants";
 import type { PlanChange } from "../../types";
-import type { MemoryEpisode, MemoryEpisodeType } from "../episode";
+import type { MemoryEpisode, MemoryEpisodeSource, MemoryEpisodeType } from "../episode";
 
 export interface BuildPlanUpdateEpisodesInput {
   changes: PlanChange[];
   happenedAt: Date;
   isDev: boolean;
+  source?: Extract<MemoryEpisodeSource, "world_tick" | "chat">;
+  changeReasonPrefix?: string;
 }
 
 interface PlanLifecycleEpisodePayload {
@@ -44,6 +46,8 @@ export function buildPlanUpdateEpisodes(
       change,
       happenedAt: input.happenedAt,
       isDev: input.isDev,
+      source: input.source ?? "world_tick",
+      changeReasonPrefix: input.changeReasonPrefix ?? "本次 tick",
     });
     return episode ? [episode] : [];
   });
@@ -53,6 +57,8 @@ function createPlanLifecycleEpisode(input: {
   change: PlanChange;
   happenedAt: Date;
   isDev: boolean;
+  source: Extract<MemoryEpisodeSource, "world_tick" | "chat">;
+  changeReasonPrefix: string;
 }): MemoryEpisode<PlanLifecycleEpisodePayload> | null {
   const { change } = input;
   if (shouldSkipPlanLifecycleEpisode(change)) {
@@ -62,10 +68,10 @@ function createPlanLifecycleEpisode(input: {
   const scopeText = change.scope === "longTerm" ? "长期计划" : "短期计划";
   const actionText = describeChangeType(change.changeType);
   const episodeType = mapPlanChangeTypeToEpisodeType(change.changeType);
-  const changeReason = `本次 tick ${actionText}${scopeText}`;
+  const changeReason = `${input.changeReasonPrefix} ${actionText}${scopeText}`;
 
   return {
-    source: "world_tick",
+    source: input.source,
     type: episodeType,
     subject: SUBJECT_NAME,
     happenedAt: input.happenedAt,

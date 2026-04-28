@@ -1,9 +1,9 @@
 import {
   buildDiarySystemPrompt,
   DEFAULT_DIARY_SUBJECT,
+  flashModel,
   getRecentMemoryEpisodes,
   type IMemoryEpisode,
-  minimaxModel,
   NICKNAME,
   SUBJECT_NAME,
   strongModel,
@@ -118,7 +118,7 @@ async function summarizeConversationEpisodes(input: {
   episodes: IMemoryEpisode[];
 }): Promise<DiaryMaterialItem> {
   const result = await generateText({
-    model: minimaxModel,
+    model: flashModel,
     prompt: [
       "你是日记生成前的聊天素材压缩器。",
       "请把下面这一组聊天窗口压成一小段自然语言摘要，供后续写日记使用。",
@@ -151,7 +151,7 @@ async function writeDiaryText(input: {
   materials: DiaryMaterialItem[];
 }): Promise<string> {
   const result = await generateText({
-    model: strongModel,
+    model: flashModel,
     system: buildDiarySystemPrompt({
       subject: input.subject,
       diaryDate: input.diaryDate,

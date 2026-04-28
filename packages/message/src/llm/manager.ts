@@ -1,16 +1,18 @@
 import {
   buildMessageHistoryUserPrompt,
+  buildPrivatePlanProposalPrompt,
+  createPrivatePlanChangesProposalTool,
   diarySearchTool,
+  flashModel,
   generateStructuredOutput,
   getCharacterCardPrompt,
   getGroupReplyDecisionSystemPrompt,
   getPersonMemoryTool,
   listPersonMemoriesTool,
   messageHistorySchemaPrompt,
-  minimaxModel,
+  planManager,
   queryStateTool,
   queryWorldMapTool,
-  siliconflow,
   todayEventSearchTool,
 } from "@yuiju/utils";
 import { generateText, Output, stepCountIs } from "ai";
@@ -127,7 +129,7 @@ export class LLMManager {
     );
 
     const { output } = await generateStructuredOutput({
-      model: minimaxModel,
+      model: flashModel,
       providerOptions: {
         Siliconflow: {
           enable_thinking: false,
@@ -201,7 +203,7 @@ export class LLMManager {
 
     try {
       const result = await generateText({
-        model: minimaxModel,
+        model: flashModel,
         providerOptions: {
           Siliconflow: {
             enable_thinking: false,
@@ -263,14 +265,17 @@ export class LLMManager {
   public async chatWithLLM(message: StoredPrivateMessage) {
     const sessionId = this.buildPrivateSessionKey(message.user_id);
     const { historyJson, summary } = await this.privateSession.getHistoryJson(sessionId);
+    const sessionLabel = getProtocolMessageSenderName(message);
+    const planState = await planManager.getState();
     const systemPrompt = [
       getCharacterCardPrompt(),
       stickerState.buildPromptSection(),
       messageHistorySchemaPrompt,
+      buildPrivatePlanProposalPrompt(planState),
     ].join("\n\n");
 
     const result = await generateText({
-      model: siliconflow("Pro/moonshotai/Kimi-K2.5"),
+      model: flashModel,
       providerOptions: {
         Siliconflow: {
           enable_thinking: false,
@@ -293,12 +298,17 @@ export class LLMManager {
         getPersonMemory: getPersonMemoryTool,
         queryStateTool: queryStateTool,
         queryWorldMap: queryWorldMapTool,
+        proposePlanChanges: createPrivatePlanChangesProposalTool({
+          sessionLabel,
+          summary,
+          historyJson,
+        }),
       },
       stopWhen: stepCountIs(20),
     });
 
     logger.info("[message.llm.private] LLM 返回私聊回复", {
-      sessionLabel: getProtocolMessageSenderName(message),
+      sessionLabel,
       text: result.text,
     });
 

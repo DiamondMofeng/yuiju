@@ -7,12 +7,14 @@ import type {
   PlanState,
 } from "@yuiju/utils";
 import {
+  agentPlanChangeSchema,
   chooseActionPrompt,
   chooseCafeCoffeePrompt,
   chooseFoodPrompt,
   chooseShopProductPrompt,
   chooseShrinePrayerPrompt,
   diarySearchTool,
+  flashModel,
   generateStructuredOutput,
   getPersonMemoryTool,
   listPersonMemoriesTool,
@@ -29,14 +31,6 @@ import { logger } from "@/utils/logger";
 import { queryAvailableFood } from "./tools";
 
 const RETRY_COUNT = 3;
-
-const agentPlanChangeSchema = z.object({
-  scope: z.enum(["longTerm", "shortTerm"]).describe("计划类型，长期计划还是短期计划"),
-  changeType: z.enum(["created", "updated", "abandoned", "completed"]).describe("计划变更类型。"),
-  currentPlan: z.string().optional().describe("原计划内容"),
-  nextPlan: z.string().optional().describe("新计划内容"),
-  reason: z.string().describe("这次变更的原因。"),
-});
 
 type ParameterAgentSelectedItem = {
   value: string;
@@ -83,7 +77,7 @@ export async function chooseActionAgent(
   for (let i = 0; i < RETRY_COUNT; i++) {
     try {
       const { output } = await generateStructuredOutput({
-        model: qwen3Model,
+        model: strongModel,
         providerOptions: {
           Siliconflow: {
             enable_thinking: true,
@@ -96,13 +90,7 @@ export async function chooseActionAgent(
           getPersonMemory: getPersonMemoryTool,
           queryAvailableFood: queryAvailableFood(context),
           queryWorldMap: queryWorldMapTool,
-          reviewPlanChanges: reviewPlanChangesTool({
-            planState,
-            characterState: context.characterState.log(),
-            worldState: context.worldState.log(),
-            eventDescription: context.eventDescription,
-            recentBehaviorList: actionMemoryList,
-          }),
+          reviewPlanChanges: reviewPlanChangesTool(),
         },
         output: Output.object({
           schema: z.object({
@@ -159,7 +147,7 @@ export async function chooseFoodAgent(
   for (let i = 0; i < RETRY_COUNT; i++) {
     try {
       const { output } = await generateStructuredOutput({
-        model: strongModel,
+        model: flashModel,
         providerOptions: {
           Siliconflow: {
             enable_thinking: false,
@@ -318,7 +306,7 @@ export async function chooseShrinePrayerAgent(
   for (let i = 0; i < RETRY_COUNT; i++) {
     try {
       const { output } = await generateStructuredOutput({
-        model: strongModel,
+        model: flashModel,
         providerOptions: {
           Siliconflow: {
             enable_thinking: false,

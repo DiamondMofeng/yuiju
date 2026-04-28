@@ -1,4 +1,5 @@
 import { NICKNAME, SUBJECT_NAME } from "../constants";
+import type { PlanState } from "../types";
 import { baseInformation, characterPersonalityPrompt } from "./character-card";
 
 export interface MessageHistoryUserPromptInput {
@@ -13,9 +14,21 @@ export interface MessageSummaryPromptInput {
   transcript: string;
 }
 
+function formatPlanStateForMessagePrompt(planState: PlanState): string {
+  const longTermPlan = planState.longTermPlan?.title ?? "（无）";
+  const shortTermPlans =
+    planState.shortTermPlans.length > 0
+      ? planState.shortTermPlans.map((plan, index) => `${index + 1}. ${plan.title}`).join("\n")
+      : "（无）";
+
+  return `长期计划：${longTermPlan}
+短期计划：
+${shortTermPlans}`;
+}
+
 export const messageHistorySchemaPrompt = `
 ## 历史消息结构
-你会在用户消息中看到 json 历史会话消息，它是按时间从旧到新排列的 JSON 数组。
+按时间从旧到新排列的 JSON 数组。
 
 每一项表示一条聊天消息：
 - \`speaker\`：发言者展示名；如果是${SUBJECT_NAME}(${NICKNAME})，表示这是你自己之前发出的消息
@@ -29,7 +42,6 @@ export const messageHistorySchemaPrompt = `
 - \`reply\`：引用回复，\`data.speaker\` 是被引用消息的发言者，\`data.content\` 是被引用内容
 - \`face\`：QQ 表情，读取 \`data.faceText\`
 
-理解对话时要结合 \`speaker\`、\`time\` 和 \`content\`
 `.trim();
 
 /**
@@ -71,28 +83,40 @@ ${input.historyJson}
  * 构建群聊是否回复的裁决系统提示词。
  */
 export function getGroupReplyDecisionSystemPrompt(): string {
-  //   const backup = `## shouldReply=true 的场景
-  // - 消息中提到了悠酱
-  // - 明显在和悠酱对话
-  // - 在欺负翊小久，悠酱想要保护
-
-  // ## shouldReply=false 的场景
-  // - 没有和悠酱对话
-  // - 悠酱之前提过不想继续聊天了
-  // 其余场景 shouldReply=false。`;
-
   return `
 # 任务
 你是群聊回复裁决器，唯一任务是判断悠酱现在是否应该回复最新一条普通群消息。
 你只输出结构化结果中的 shouldReply 布尔值，不负责生成回复内容。
 群聊不需要每条都回，更不能抢话。回复策略应该保守，只在必要时才回复。
-请你根据悠酱的性格自行决定是否回复吧。
+当悠酱接不上话题时，请不要回复。
+请你根据悠酱的性格决定是否回复吧。
 
 # 角色人设信息
 ${baseInformation}
 
 ${characterPersonalityPrompt}
 `;
+}
+
+/**
+ * 构建私聊场景的计划提案提示词。
+ *
+ * 说明：
+ * - 私聊模型只能提交计划变更提案，不能确认计划已经生效；
+ * - 真正的审查、应用和记忆写入由后台链路处理。
+ */
+export function buildPrivatePlanProposalPrompt(planState: PlanState): string {
+  return `
+## 当前计划状态
+${formatPlanStateForMessagePrompt(planState)}
+
+## 私聊计划提案规则
+只有当私聊内容明确影响悠酱后续安排时，才调用 \`proposePlanChanges\` 提交计划变更提案。
+普通聊天、情绪回应、临时问答、寒暄和随口闲聊，不要调用 \`proposePlanChanges\`。
+\`proposePlanChanges\` 只表示提案已提交后台审查，不代表计划已经更新成功。
+调用工具后，不要对用户说“计划已更新”“已加入计划”“已经安排好”等确认生效的话。
+不要在回复里暴露 JSON、工具调用、后台审查或内部计划系统；回复仍然保持自然私聊口吻。
+`.trim();
 }
 
 /**
