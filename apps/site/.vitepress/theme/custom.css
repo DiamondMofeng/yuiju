@@ -1,0 +1,99 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --vp-font-family-base: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+  --vp-c-brand-1: #2f6fe4;
+  --vp-c-brand-2: #4c86f3;
+  --vp-c-brand-3: #73a5ff;
+  --vp-c-bg: #f6f9ff;
+  --vp-c-bg-alt: #eef4ff;
+  --vp-c-bg-soft: #e8f0ff;
+  --vp-c-divider: #d9e5fb;
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(128deg, #2f6fe4 28%, #0891b2 88%);
+  --vp-home-hero-image-background-image: radial-gradient(
+    circle at 30% 25%,
+    #8eb9ff 0%,
+    #5f8ff4 42%,
+    #0e90b8 100%
+  );
+  --vp-home-hero-image-filter: blur(56px);
+  --site-card-border: #d7e4ff;
+  --site-card-bg: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  --site-navbar-bg: color-mix(in srgb, #f6f9ff 86%, white 14%);
+  --site-grid-a: #dce9ff;
+  --site-grid-b: #ddf7ff;
+}
+
+.dark {
+  --vp-c-brand-1: #6da4ff;
+  --vp-c-brand-2: #8ab8ff;
+  --vp-c-brand-3: #a7ccff;
+  --vp-c-bg: #0b1220;
+  --vp-c-bg-alt: #0f1a2e;
+  --vp-c-bg-soft: #14233d;
+  --vp-c-divider: #243856;
+  --vp-c-text-1: #e9efff;
+  --vp-c-text-2: #becbe5;
+  --vp-home-hero-name-background: linear-gradient(128deg, #9fc4ff 24%, #66dbc8 90%);
+  --vp-home-hero-image-background-image: radial-gradient(
+    circle at 28% 22%,
+    #274b7f 0%,
+    #1d345f 45%,
+    #0f3141 100%
+  );
+  --site-card-border: #2a4266;
+  --site-card-bg: linear-gradient(180deg, #111e33 0%, #0f1a2c 100%);
+  --site-navbar-bg: color-mix(in srgb, #0b1220 84%, #111f36 16%);
+  --site-grid-a: #1a2f50;
+  --site-grid-b: #173446;
+}
+
+.Layout {
+  background:
+    radial-gradient(circle at 12% -10%, var(--site-grid-a) 0%, transparent 32%),
+    radial-gradient(circle at 90% -6%, var(--site-grid-b) 0%, transparent 28%),
+    var(--vp-c-bg);
+}
+
+.VPNavBar {
+  backdrop-filter: saturate(1.3) blur(14px);
+  background: var(--site-navbar-bg);
+  border-bottom: 1px solid var(--vp-c-divider);
+}
+
+.VPNavBarTitle .title {
+  letter-spacing: 0.2px;
+  font-weight: 700;
+}
+
+.VPHero {
+  padding-top: 56px;
+}
+
+.VPHero .name,
+.VPHero .text {
+  letter-spacing: 0.1px;
+}
+
+.VPFeature {
+  border: 1px solid var(--site-card-border);
+  background: var(--site-card-bg);
+  box-shadow: 0 18px 36px -28px rgba(18, 56, 116, 0.45);
+}
+
+.VPFeature:hover {
+  border-color: var(--vp-c-brand-2);
+}
+
+.VPButton.brand {
+  box-shadow: 0 12px 28px -16px rgba(47, 111, 228, 0.9);
+}
+
+.VPLocalNav {
+  border-bottom: 1px solid var(--vp-c-divider);
+}
+
+.dark .VPButton.brand {
+  box-shadow: 0 12px 28px -16px rgba(79, 145, 255, 0.9);
+}
