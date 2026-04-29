@@ -21,6 +21,7 @@ const STICKER_TOKEN_REGEX = /\[\[sticker:([a-zA-Z0-9_-]+)\]\]/g;
 
 export class StickerState {
   private readonly registry = new Map<string, ResolvedSticker>();
+  private promptSection: string | null = null;
   private hasInitialized = false;
 
   /**
@@ -58,6 +59,8 @@ export class StickerState {
       loadedKeys.push(key);
     }
 
+    this.promptSection = this.buildPromptSection();
+
     if (!loadedKeys.length) {
       logger.warn("[message.sticker] 当前无可用表情包，LLM 不应输出 [[sticker:*]] 标记");
       return;
@@ -75,6 +78,10 @@ export class StickerState {
 
   public list(): ResolvedSticker[] {
     return [...this.registry.values()];
+  }
+
+  public getPromptSection(): string {
+    return this.promptSection ?? this.buildPromptSection();
   }
 
   /**

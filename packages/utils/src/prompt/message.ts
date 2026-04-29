@@ -1,6 +1,5 @@
 import { NICKNAME, SUBJECT_NAME } from "../constants";
 import type { PlanState } from "../types";
-import { baseInformation, characterPersonalityPrompt } from "./character-card";
 
 export interface MessageHistoryUserPromptInput {
   summary?: string;
@@ -21,9 +20,11 @@ function formatPlanStateForMessagePrompt(planState: PlanState): string {
       ? planState.shortTermPlans.map((plan, index) => `${index + 1}. ${plan.title}`).join("\n")
       : "（无）";
 
-  return `长期计划：${longTermPlan}
+  return `
+长期计划：${longTermPlan}
 短期计划：
-${shortTermPlans}`;
+${shortTermPlans}
+`;
 }
 
 export const messageHistorySchemaPrompt = `
@@ -44,6 +45,14 @@ export const messageHistorySchemaPrompt = `
 
 `.trim();
 
+export const chatReplyRulesPrompt = `
+## 聊天回复规则
+先判断最新消息是否需要回复，再决定回复内容。
+聊天回复要克制，不要每条都回，也不要打断自然对话节奏。
+当最新消息明确提问、请求回应、直接 @、引用回复，或上下文正在自然邀请参与时，更倾向回复。
+当最新消息只是闲聊片段、情绪宣泄、表情或图片反应、话题已经自然结束、当前接不上话，或回复会显得多余时，不要回复。
+`.trim();
+
 /**
  * 构建消息场景共用的历史上下文提示词。
  *
@@ -56,10 +65,10 @@ export function buildMessageHistoryUserPrompt(input: MessageHistoryUserPromptInp
 
   switch (input.latestMessageDirectedType) {
     case "at":
-      latestMessageDirectedDescription = "这条最新消息显式 @ 了你。";
+      latestMessageDirectedDescription = "这条最新消息显式 @ 了当前角色。";
       break;
     case "reply":
-      latestMessageDirectedDescription = "这条最新消息使用了 reply 引用回复。";
+      latestMessageDirectedDescription = "这条最新消息使用 reply 引用回复当前角色。";
       break;
   }
 
@@ -76,25 +85,6 @@ ${latestMessageDirectedDescription}
 \`\`\`json
 ${input.historyJson}
 \`\`\`
-`;
-}
-
-/**
- * 构建群聊是否回复的裁决系统提示词。
- */
-export function getGroupReplyDecisionSystemPrompt(): string {
-  return `
-# 任务
-你是群聊回复裁决器，唯一任务是判断悠酱现在是否应该回复最新一条普通群消息。
-你只输出结构化结果中的 shouldReply 布尔值，不负责生成回复内容。
-群聊不需要每条都回，更不能抢话。回复策略应该保守，只在必要时才回复。
-当悠酱接不上话题时，请不要回复。
-请你根据悠酱的性格决定是否回复吧。
-
-# 角色人设信息
-${baseInformation}
-
-${characterPersonalityPrompt}
 `;
 }
 

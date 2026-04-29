@@ -56,16 +56,10 @@ export async function groupMessageHandler(
 
   try {
     const messageCheckResult = await isGroupMessageDirectedToBot(storedMessage, napcat);
-    const shouldReply = await llmManager.shouldReplyGroupMessage(
+    const groupChatResult = await llmManager.chatInGroup(
       storedMessage,
-      messageCheckResult.type,
+      messageCheckResult.isDriectedToBot ? messageCheckResult.type : undefined,
     );
-
-    if (!shouldReply) {
-      return;
-    }
-
-    const groupChatResult = await llmManager.chatInGroup(storedMessage);
     if (groupChatResult.status === "cancelled") {
       logger.info("[message.reply.group] 群聊回复生成已取消，不发送消息", {
         groupId: context.group_id,
@@ -84,8 +78,18 @@ export async function groupMessageHandler(
       return;
     }
 
-    const reply = (groupChatResult.text || "").trim();
-    if (!reply || reply === "null") {
+    if (!groupChatResult.shouldReply) {
+      logger.info("[message.reply.group] 不回复", {
+        groupId: context.group_id,
+        groupName,
+        requestId: groupChatResult.requestId,
+        reason: groupChatResult.noReplyReason || "未提供原因",
+      });
+      return;
+    }
+
+    const reply = groupChatResult.reply.trim();
+    if (!reply) {
       return;
     }
 

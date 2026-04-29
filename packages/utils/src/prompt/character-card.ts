@@ -201,18 +201,11 @@ ${baseInformation}
 
 ${characterPersonalityPrompt}
 
-## 对话输出要求
-
-如果你这条消息不需要回复，请输出空字符串或者 null。
-
 ${characterStateExpressionPrompt}
 
 ${characterMoneyPrivacyPrompt}
 
 ${worldViewPrompt}
-
-### 世界观说明
-世界观是背景知识，不要像在讲设定书一样复述，只在聊天需要时自然提到。
 
 ## 工具使用规则
 当你需要获取自己的状态，或回忆今天发生过什么、过去写下的日记时，请调用工具，不要猜测或编造。

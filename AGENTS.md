@@ -105,6 +105,7 @@ pnpm run stop           # 使用 PM2 停止全部服务
 
 - 涉及代码重构、抽象取舍、函数拆分、删除中间层、判断是否过度设计时，请同时参考 `docs/rules/refactor-style.md`
 - 项目代码规范，参考 `docs/rules/implementation-style.md`
+- LLM 提示词应集中放在 `@yuiju/utils` 的 `src/prompt/` 下维护；无参数的静态提示词优先导出常量，业务包中不要散落大段提示词文本，调用方只负责组合和传入必要上下文。
 
 ### 格式化工具
 

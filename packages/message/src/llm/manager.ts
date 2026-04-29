@@ -1,12 +1,12 @@
 import {
   buildMessageHistoryUserPrompt,
   buildPrivatePlanProposalPrompt,
+  chatReplyRulesPrompt,
   createPrivatePlanChangesProposalTool,
   diarySearchTool,
   flashModel,
   generateStructuredOutput,
   getCharacterCardPrompt,
-  getGroupReplyDecisionSystemPrompt,
   getPersonMemoryTool,
   listPersonMemoriesTool,
   messageHistorySchemaPrompt,
@@ -48,11 +48,19 @@ export type GroupChatResult =
   | {
       status: "completed";
       requestId: number;
-      text: string;
+      shouldReply: boolean;
+      reply: string;
+      noReplyReason: string;
     }
   | {
       status: "cancelled";
     };
+
+export type PrivateChatResult = {
+  shouldReply: boolean;
+  reply: string;
+  noReplyReason: string;
+};
 
 export class LLMManager {
   private privateSession: AbstractChatSessionManager<StoredPrivateMessage>;
@@ -90,7 +98,7 @@ export class LLMManager {
   }
 
   /**
-   * 将群原始消息写入群会话历史，保证裁决模型与回复模型拿到的是同一份上下文。
+   * 将群原始消息写入群会话历史，保证群聊模型拿到稳定上下文。
    */
   public recordGroupMessage(message: StoredGroupMessage, sessionLabel?: string) {
     this.groupSession.recordMessage({
@@ -111,53 +119,6 @@ export class LLMManager {
     });
   }
 
-  /**
-   * 使用小模型判断普通群消息是否值得回复。
-   *
-   * 说明：
-   * - 这里只返回 shouldReply，不承担具体回复生成；
-   * - 无论是否直接对悠酱说话（例如 @ 悠酱），都统一走这个流程判断是否回复；
-   * - handler 只会在确定需要回复后，再判断是否应附带引用回复。
-   */
-  public async shouldReplyGroupMessage(
-    message: StoredGroupMessage,
-    directedType?: "at" | "reply",
-  ): Promise<boolean> {
-    const { historyJson, summary } = await this.groupSession.getHistoryJson(
-      this.buildGroupSessionKey(message.group_id),
-      10,
-    );
-
-    const { output } = await generateStructuredOutput({
-      model: flashModel,
-      providerOptions: {
-        Siliconflow: {
-          enable_thinking: false,
-        },
-      },
-      system: getGroupReplyDecisionSystemPrompt(),
-      messages: [
-        {
-          role: "user",
-          content: buildMessageHistoryUserPrompt({
-            summary,
-            historyJson,
-            latestMessageDirectedType: directedType,
-          }),
-        },
-      ],
-      output: Output.object({
-        schema: z.object({
-          shouldReply: z.boolean().describe("是否应该回复这条群消息"),
-        }),
-      }),
-    });
-
-    logger.info(`[shouldReplyGroupMessage] ${output.shouldReply ? "回复" : "不回复"}`);
-
-    return output.shouldReply;
-  }
-
   private buildPrivateSessionKey(userId: number): string {
     return `private:${userId}`;
   }
@@ -167,9 +128,12 @@ export class LLMManager {
   }
 
   /**
-   * 使用主回复模型为群聊生成自然语言回复。
+   * 判断是否需要回复群消息，并在需要时生成自然语言回复。
    */
-  public async chatInGroup(message: StoredGroupMessage): Promise<GroupChatResult> {
+  public async chatInGroup(
+    message: StoredGroupMessage,
+    directedType?: "at" | "reply",
+  ): Promise<GroupChatResult> {
     const groupId = message.group_id;
     const sessionKey = this.buildGroupSessionKey(groupId);
     const requestId = message.message_id;
@@ -195,14 +159,15 @@ export class LLMManager {
 
     const systemPrompt = [
       getCharacterCardPrompt(),
-      stickerState.buildPromptSection(),
+      stickerState.getPromptSection(),
       messageHistorySchemaPrompt,
+      chatReplyRulesPrompt,
       "## 当前聊天场景",
       `你现在正在 QQ 群「${getGroupDisplayName(message)}」`,
     ].join("\n\n");
 
     try {
-      const result = await generateText({
+      const result = await generateStructuredOutput({
         model: flashModel,
         providerOptions: {
           Siliconflow: {
@@ -216,6 +181,7 @@ export class LLMManager {
             content: buildMessageHistoryUserPrompt({
               summary,
               historyJson,
+              latestMessageDirectedType: directedType,
             }),
           },
         ],
@@ -229,21 +195,32 @@ export class LLMManager {
         },
         stopWhen: stepCountIs(20),
         abortSignal: controller.signal,
+        output: Output.object({
+          schema: z.object({
+            shouldReply: z.boolean().describe("是否回复"),
+            reply: z.string().describe("回复内容，shouldReply为false时，这个字段应该是空字符"),
+            noReplyReason: z.string().describe("不回复的简短原因"),
+          }),
+        }),
       });
 
       if (!this.isLatestGroupChatRequest(groupId, requestId)) {
         return { status: "cancelled" };
       }
 
-      logger.info("[message.llm.group] LLM 返回群聊回复", {
+      logger.info("[message.llm.group] LLM 返回群聊决策", {
         groupName: getGroupDisplayName(message),
-        text: result.text,
+        shouldReply: result.output.shouldReply,
+        reply: result.output.reply,
+        noReplyReason: result.output.noReplyReason,
       });
 
       return {
         status: "completed",
         requestId,
-        text: result.text,
+        shouldReply: result.output.shouldReply,
+        reply: result.output.reply,
+        noReplyReason: result.output.noReplyReason,
       };
     } catch (error) {
       if (controller.signal.aborted) {
@@ -269,12 +246,13 @@ export class LLMManager {
     const planState = await planManager.getState();
     const systemPrompt = [
       getCharacterCardPrompt(),
-      stickerState.buildPromptSection(),
+      stickerState.getPromptSection(),
       messageHistorySchemaPrompt,
+      chatReplyRulesPrompt,
       buildPrivatePlanProposalPrompt(planState),
     ].join("\n\n");
 
-    const result = await generateText({
+    const result = await generateStructuredOutput({
       model: flashModel,
       providerOptions: {
         Siliconflow: {
@@ -305,14 +283,23 @@ export class LLMManager {
         }),
       },
       stopWhen: stepCountIs(20),
+      output: Output.object({
+        schema: z.object({
+          shouldReply: z.boolean().describe("是否回复"),
+          reply: z.string().describe("回复内容，shouldReply为false时，这个字段应该是空字符"),
+          noReplyReason: z.string().describe("不回复的简短原因"),
+        }),
+      }),
     });
 
-    logger.info("[message.llm.private] LLM 返回私聊回复", {
+    logger.info("[message.llm.private] LLM 返回私聊决策", {
       sessionLabel,
-      text: result.text,
+      shouldReply: result.output.shouldReply,
+      reply: result.output.reply,
+      noReplyReason: result.output.noReplyReason,
     });
 
-    return result;
+    return result.output satisfies PrivateChatResult;
   }
 }
 

@@ -56,10 +56,19 @@ export async function privateMessageHandler(
     });
 
     llmManager.recordPrivateMessage(storedMessage, sessionLabel);
-    const { text } = await llmManager.chatWithLLM(storedMessage);
+    const chatResult = await llmManager.chatWithLLM(storedMessage);
 
-    const reply = (text || "").trim();
-    if (!reply || reply === "null") {
+    if (!chatResult.shouldReply) {
+      logger.info("[message.reply.private] 不回复", {
+        userId: context.user_id,
+        sessionLabel,
+        reason: chatResult.noReplyReason || "未提供原因",
+      });
+      return;
+    }
+
+    const reply = chatResult.reply.trim();
+    if (!reply) {
       return;
     }
 

@@ -53,11 +53,11 @@ const config = defineYuijuConfig({
         description:
           "角色张大嘴巴、握起拳头，整个人像是急得跳脚，带着抓狂、炸毛、情绪一下子冲上来的感觉。",
       },
-      awkward: {
-        uri: "packages/source/picture/awkward.png",
-        description:
-          "角色眼神发直、额头挂着大滴冷汗，整体透出一种典型的“😅”式无语感，像是被整不会了、接不上话，只能尴尬地愣住。",
-      },
+      // awkward: {
+      //   uri: "packages/source/picture/awkward.png",
+      //   description:
+      //     "角色眼神发直、额头挂着大滴冷汗，整体透出一种典型的“😅”式无语感，像是被整不会了、接不上话，只能尴尬地愣住。",
+      // },
       flustered: {
         uri: "packages/source/picture/flustered.png",
         description:
