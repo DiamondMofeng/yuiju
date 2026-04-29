@@ -1,0 +1,365 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --vp-font-family-base: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+  --vp-c-brand-1: #4b74d9;
+  --vp-c-brand-2: #648be9;
+  --vp-c-brand-3: #8aabf8;
+  --vp-c-bg: #f7f8fd;
+  --vp-c-bg-alt: #eff3fb;
+  --vp-c-bg-soft: #e9eef9;
+  --vp-c-divider: #d9e3f5;
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(128deg, #4b74d9 18%, #5aa7d7 52%, #f0a58e 100%);
+  --vp-home-hero-image-background-image: radial-gradient(
+    circle at 30% 25%,
+    rgba(133, 170, 255, 0.95) 0%,
+    rgba(112, 149, 236, 0.88) 38%,
+    rgba(244, 199, 182, 0.72) 100%
+  );
+  --vp-home-hero-image-filter: blur(62px);
+  --site-card-border: rgba(191, 206, 234, 0.86);
+  --site-card-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 250, 255, 0.94) 100%);
+  --site-card-shadow: 0 30px 60px -42px rgba(67, 93, 148, 0.45);
+  --site-navbar-bg: color-mix(in srgb, #f7f8fd 76%, white 24%);
+  --site-grid-a: rgba(210, 224, 255, 0.9);
+  --site-grid-b: rgba(235, 243, 255, 0.95);
+  --site-grid-c: rgba(255, 229, 217, 0.78);
+  --site-text-soft: #55637e;
+  --site-warm-1: #fff0e8;
+  --site-warm-2: #f7cbb8;
+}
+
+.dark {
+  --vp-c-brand-1: #7ca6ff;
+  --vp-c-brand-2: #97bbff;
+  --vp-c-brand-3: #b7d0ff;
+  --vp-c-bg: #0d1320;
+  --vp-c-bg-alt: #121a2b;
+  --vp-c-bg-soft: #182338;
+  --vp-c-divider: #293a58;
+  --vp-c-text-1: #ebf0ff;
+  --vp-c-text-2: #bfcae4;
+  --vp-home-hero-name-background: linear-gradient(128deg, #adc8ff 20%, #8dd4ff 54%, #ffc5b1 100%);
+  --vp-home-hero-image-background-image: radial-gradient(
+    circle at 28% 22%,
+    rgba(70, 109, 188, 0.92) 0%,
+    rgba(39, 63, 111, 0.88) 48%,
+    rgba(122, 73, 68, 0.65) 100%
+  );
+  --site-card-border: rgba(51, 71, 108, 0.95);
+  --site-card-bg: linear-gradient(180deg, rgba(18, 28, 46, 0.9) 0%, rgba(14, 22, 37, 0.94) 100%);
+  --site-card-shadow: 0 34px 72px -48px rgba(8, 12, 24, 0.9);
+  --site-navbar-bg: color-mix(in srgb, #0d1320 82%, #1a2336 18%);
+  --site-grid-a: rgba(36, 57, 95, 0.9);
+  --site-grid-b: rgba(23, 40, 70, 0.96);
+  --site-grid-c: rgba(77, 51, 55, 0.58);
+  --site-text-soft: #9ca9c5;
+  --site-warm-1: rgba(68, 46, 46, 0.58);
+  --site-warm-2: rgba(232, 175, 154, 0.7);
+}
+
+.Layout {
+  background:
+    radial-gradient(circle at 12% -10%, var(--site-grid-a) 0%, transparent 32%),
+    radial-gradient(circle at 90% -6%, var(--site-grid-b) 0%, transparent 28%),
+    radial-gradient(circle at 72% 18%, var(--site-grid-c) 0%, transparent 22%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, transparent 28%),
+    var(--vp-c-bg);
+}
+
+.VPNavBar {
+  backdrop-filter: saturate(1.3) blur(18px);
+  background: var(--site-navbar-bg);
+  border-bottom: 1px solid var(--vp-c-divider);
+}
+
+.VPNavBarTitle .title {
+  letter-spacing: 0.2px;
+  font-weight: 700;
+}
+
+.VPHero {
+  padding-top: 64px;
+}
+
+.VPHome .VPHero .container {
+  align-items: center;
+  gap: 36px;
+}
+
+.VPHero .name,
+.VPHero .text {
+  letter-spacing: 0.1px;
+}
+
+.VPHero .tagline {
+  max-width: 620px;
+  color: var(--site-text-soft);
+  font-size: 18px;
+  line-height: 1.85;
+}
+
+.VPHero .actions {
+  gap: 14px;
+}
+
+.VPHero .image {
+  padding: 18px;
+}
+
+.VPHero .image-src {
+  border-radius: 28px;
+  box-shadow: 0 26px 56px -34px rgba(61, 85, 133, 0.45);
+}
+
+.VPFeature {
+  border: 1px solid var(--site-card-border);
+  background: var(--site-card-bg);
+  box-shadow: var(--site-card-shadow);
+}
+
+.VPFeature:hover {
+  border-color: var(--vp-c-brand-2);
+  transform: translateY(-2px);
+}
+
+.VPFeature .title {
+  letter-spacing: 0.1px;
+}
+
+.VPButton.brand {
+  box-shadow: 0 14px 30px -18px rgba(75, 116, 217, 0.82);
+}
+
+.VPButton.alt {
+  border-color: rgba(120, 145, 200, 0.26);
+  background: rgba(255, 255, 255, 0.46);
+}
+
+.dark .VPButton.brand {
+  box-shadow: 0 14px 30px -18px rgba(87, 142, 255, 0.92);
+}
+
+.dark .VPButton.alt {
+  background: rgba(22, 33, 53, 0.8);
+}
+
+.VPLocalNav {
+  border-bottom: 1px solid var(--vp-c-divider);
+}
+
+.VPHome .container {
+  max-width: 1180px;
+}
+
+.home-section {
+  margin: 72px auto;
+}
+
+.home-story,
+.home-rhythm,
+.home-architecture {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  gap: 24px;
+  align-items: stretch;
+}
+
+.home-story-copy,
+.home-story-panel,
+.home-card,
+.architecture-frame {
+  border: 1px solid var(--site-card-border);
+  background: var(--site-card-bg);
+  border-radius: 28px;
+  box-shadow: var(--site-card-shadow);
+}
+
+.home-story-copy,
+.home-card,
+.home-architecture-copy {
+  padding: 34px;
+}
+
+.home-story-copy h2,
+.home-card h2 {
+  margin: 0 0 18px;
+  font-size: 32px;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+
+.home-story-copy p,
+.home-card p,
+.story-stat p {
+  color: var(--site-text-soft);
+  line-height: 1.9;
+}
+
+.home-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  color: var(--vp-c-brand-1);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.home-eyebrow::before {
+  width: 18px;
+  height: 1px;
+  background: currentColor;
+  content: "";
+}
+
+.home-story-panel {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, transparent 100%),
+    var(--site-card-bg);
+}
+
+.story-stat {
+  padding: 20px 20px 18px;
+  border: 1px solid rgba(191, 206, 234, 0.6);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.46);
+}
+
+.dark .story-stat {
+  border-color: rgba(57, 78, 118, 0.9);
+  background: rgba(18, 28, 46, 0.58);
+}
+
+.story-stat span {
+  color: var(--site-text-soft);
+  font-size: 13px;
+}
+
+.story-stat strong {
+  display: block;
+  margin: 6px 0 10px;
+  font-size: 24px;
+  line-height: 1.35;
+}
+
+.tick-list {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: tick-step;
+}
+
+.tick-list li {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  padding: 16px 18px;
+  border: 1px solid rgba(191, 206, 234, 0.62);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.46);
+}
+
+.dark .tick-list li {
+  border-color: rgba(57, 78, 118, 0.9);
+  background: rgba(18, 28, 46, 0.58);
+}
+
+.tick-list li::before {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--vp-c-brand-1) 0%, var(--site-warm-2) 100%);
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  content: counter(tick-step, decimal-leading-zero);
+  counter-increment: tick-step;
+}
+
+.tick-list strong,
+.tick-list span {
+  display: block;
+}
+
+.tick-list strong {
+  margin-bottom: 6px;
+}
+
+.tick-list span {
+  color: var(--site-text-soft);
+  line-height: 1.8;
+}
+
+.home-quote {
+  padding: 18px 8px;
+  text-align: center;
+}
+
+.home-quote p {
+  margin: 0;
+  color: var(--vp-c-text-1);
+  font-size: clamp(24px, 4vw, 42px);
+  line-height: 1.45;
+  letter-spacing: -0.03em;
+}
+
+.home-quote p::before,
+.home-quote p::after {
+  color: var(--site-warm-2);
+}
+
+.architecture-frame {
+  padding: 18px;
+}
+
+.architecture-frame img {
+  display: block;
+  width: 100%;
+  border-radius: 22px;
+}
+
+@media (max-width: 960px) {
+  .home-story,
+  .home-rhythm,
+  .home-architecture,
+  .VPHome .VPHero .container {
+    grid-template-columns: 1fr;
+  }
+
+  .VPHero {
+    padding-top: 40px;
+  }
+
+  .home-story-copy,
+  .home-card,
+  .home-architecture-copy {
+    padding: 26px;
+  }
+}
+
+@media (max-width: 640px) {
+  .VPHero .tagline {
+    font-size: 16px;
+  }
+
+  .home-story-copy h2,
+  .home-card h2 {
+    font-size: 26px;
+  }
+
+  .tick-list li {
+    grid-template-columns: 1fr;
+  }
+}

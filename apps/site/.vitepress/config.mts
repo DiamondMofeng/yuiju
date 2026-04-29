@@ -1,26 +1,13 @@
 import { defineConfig } from "vitepress";
 
-// https://vitepress.dev/reference/site-config
 export default defineConfig({
-  title: "yuiju",
-  description: "A VitePress Site",
+  title: "ゆいじゅ",
+  description: "LLM 驱动的角色自主生活模拟项目",
+  lang: "zh-Hans",
+  cleanUrls: true,
   themeConfig: {
-    // https://vitepress.dev/reference/default-theme-config
-    nav: [
-      { text: "Home", link: "/" },
-      { text: "Examples", link: "/markdown-examples" },
-    ],
-
-    sidebar: [
-      {
-        text: "Examples",
-        items: [
-          { text: "Markdown Examples", link: "/markdown-examples" },
-          { text: "Runtime API Examples", link: "/api-examples" },
-        ],
-      },
-    ],
-
-    socialLinks: [{ icon: "github", link: "https://github.com/vuejs/vitepress" }],
+    logo: "https://raw.githubusercontent.com/yixiaojiu/yuiju/main/packages/source/picture/repo_avatar.webp",
+    nav: [{ text: "GitHub", link: "https://github.com/yixiaojiu/yuiju" }],
+    socialLinks: [{ icon: "github", link: "https://github.com/yixiaojiu/yuiju" }],
   },
 });

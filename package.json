@@ -38,7 +38,10 @@
     "type-check:world": "pnpm --filter @yuiju/world run type-check",
     "type-check:message": "pnpm --filter @yuiju/message run type-check",
     "type-check:utils": "pnpm --filter @yuiju/utils run type-check",
-    "type-check": "pnpm run type-check:world && pnpm run type-check:message && pnpm run type-check:utils"
+    "type-check": "pnpm run type-check:world && pnpm run type-check:message && pnpm run type-check:utils",
+    "docs:dev": "pnpm --filter @yuiju/site run dev",
+    "docs:build": "pnpm --filter @yuiju/site run build",
+    "docs:preview": "pnpm --filter @yuiju/site run preview"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,json,jsonc,css,md}": "biome check --write --no-errors-on-unmatched"
@@ -65,6 +68,7 @@
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "vite": "^7.2.4",
+    "vitepress": "^1.6.4",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^4.0.13"
   },
