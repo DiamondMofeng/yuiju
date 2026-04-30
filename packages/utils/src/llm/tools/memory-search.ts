@@ -24,7 +24,7 @@ export const todayEventSearchTool: Tool = {
       topK: input.limit,
       timeSort: input.timeSort ?? "desc",
     });
-    logger.debug("[工具调用][todayEventSearch]", input, result);
+    logger.info("[工具调用][todayEventSearch]", input, result);
     return result;
   },
 };
@@ -39,7 +39,7 @@ export const diarySearchTool: Tool = {
       startTime: input.startDate ? `${input.startDate} 00:00:00` : undefined,
       endTime: input.endDate ? `${input.endDate} 23:59:59` : undefined,
     });
-    logger.debug("[工具调用][diarySearch]", input, result);
+    logger.info("[工具调用][diarySearch]", input, result);
     return result;
   },
 };

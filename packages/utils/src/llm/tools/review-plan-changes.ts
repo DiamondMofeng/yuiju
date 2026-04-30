@@ -1,4 +1,4 @@
-import { Output, tool } from "ai";
+import { Output, stepCountIs, tool } from "ai";
 import { z } from "zod";
 import { planManager } from "../../memory";
 import {
@@ -41,6 +41,7 @@ export async function reviewPlanChanges(
       queryStateTool,
     },
     system: planChangeReviewSystemPrompt,
+    stopWhen: stepCountIs(20),
     messages: [
       {
         role: "user",

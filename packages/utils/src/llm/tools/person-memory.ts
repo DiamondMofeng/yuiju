@@ -8,7 +8,7 @@ export const listPersonMemoriesTool = tool({
   inputSchema: z.object({}),
   execute: async () => {
     const items = await listPersonMemories();
-    logger.debug("[工具调用]", "listPersonMemories", {
+    logger.info("[工具调用]", "listPersonMemories", {
       count: items.length,
     });
 
@@ -23,7 +23,7 @@ export const getPersonMemoryTool = tool({
   }),
   execute: async ({ personId }) => {
     const result = await getPersonMemory(personId);
-    logger.debug("[工具调用]", "getPersonMemory", {
+    logger.info("[工具调用]", "getPersonMemory", {
       personId,
       found: Boolean(result),
     });

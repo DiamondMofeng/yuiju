@@ -42,7 +42,7 @@ export const strongModel = wrapLanguageModel({
  * 当前用于日记生成等偏写作型任务的模型。
  */
 export const flashModel = wrapLanguageModel({
-  model: siliconflow("Pro/MiniMaxAI/MiniMax-M2.5"),
+  model: siliconflow("MiniMaxAI/MiniMax-M2.5"),
   middleware: [],
 });
 

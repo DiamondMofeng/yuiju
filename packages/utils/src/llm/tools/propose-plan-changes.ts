@@ -19,6 +19,9 @@ async function reviewAndApplyPrivatePlanChanges(input: {
   summary?: string;
   historyJson: string;
 }) {
+  logger.info("[message.plan.private] 私聊计划变更提案", {
+    planChanges: input.planChanges,
+  });
   const reviewResult = await reviewPlanChanges({
     planChanges: input.planChanges,
     chatContext: {

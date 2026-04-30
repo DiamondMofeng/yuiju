@@ -1,11 +1,9 @@
-import "@yuiju/utils/env";
-
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { getYuijuConfig } from "@yuiju/utils";
 import { NCWebsocket } from "node-napcat-ts";
-import { stickerState } from "../state/sticker";
 import type { ChatWindowState } from "../memory/person-memory";
+import { stickerState } from "../state/sticker";
 import {
   createStoredGroupMessageFromFetched,
   getGroupDisplayName,

@@ -15,7 +15,7 @@ export const queryStateTool: Tool = {
     const planState = await initPlanStateData();
     const now = dayjs();
 
-    logger.debug("[工具调用]", "queryState");
+    logger.info("[工具调用]", "queryState");
 
     return {
       currentTime: getTimeWithWeekday(now, "MM-DD HH:mm"),

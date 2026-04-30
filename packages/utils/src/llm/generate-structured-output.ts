@@ -1,4 +1,5 @@
 import { generateText, Output } from "ai";
+import { structuredOutputJsonPrompt } from "../prompt";
 
 type GenerateTextOptions = Parameters<typeof generateText>[0];
 type GenerateTextResult = Awaited<ReturnType<typeof generateText>>;
@@ -48,39 +49,46 @@ export async function generateStructuredOutput<OUTPUT extends StructuredOutput>(
     throw new Error("generateStructuredOutput 当前只支持 string 类型的 system prompt。");
   }
 
-  const result = await generateText({
-    ...options,
-    system: [
-      options.system,
-      options.system ? "" : undefined,
-      "只输出 JSON 字符串，不要输出 Markdown 代码块。",
-      "输出必须严格满足下面的 JSON Schema。",
-      "JSON Schema:",
-      JSON.stringify(responseFormat.schema),
-    ]
-      .filter((item) => item != null)
-      .join("\n"),
-    output: Output.text(),
-  } as Parameters<typeof generateText>[0]);
+  const system = [
+    options.system,
+    structuredOutputJsonPrompt,
+    JSON.stringify(responseFormat.schema),
+  ].join("\n");
 
-  const normalizedText = result.text
-    .trim()
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
+  let lastError: unknown;
 
-  const parsedOutput = (await options.output.parseCompleteOutput(
-    { text: normalizedText },
-    {
-      response: result.response,
-      usage: result.usage,
-      finishReason: result.finishReason,
-    },
-  )) as StructuredOutputValue<OUTPUT>;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const result = await generateText({
+      ...options,
+      system,
+      output: Output.text(),
+    } as Parameters<typeof generateText>[0]);
 
-  return {
-    ...result,
-    output: parsedOutput,
-    experimental_output: parsedOutput,
-  };
+    const normalizedText = result.text
+      .trim()
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/i, "")
+      .trim();
+
+    try {
+      const parsedOutput = (await options.output.parseCompleteOutput(
+        { text: normalizedText },
+        {
+          response: result.response,
+          usage: result.usage,
+          finishReason: result.finishReason,
+        },
+      )) as StructuredOutputValue<OUTPUT>;
+
+      return {
+        ...result,
+        output: parsedOutput,
+        experimental_output: parsedOutput,
+      };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError;
 }

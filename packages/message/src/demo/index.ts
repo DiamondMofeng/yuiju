@@ -1,3 +1,3 @@
-import { main } from "./person-memory";
+import { main } from "./private-plan-change";
 
 main();

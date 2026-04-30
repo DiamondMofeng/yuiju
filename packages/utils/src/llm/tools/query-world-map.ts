@@ -15,7 +15,7 @@ export const queryWorldMapTool = tool({
   description: "查询星见町的世界地图，返回可供推导地点关系、路径、方向与移动耗时的地图 DSL。",
   inputSchema: z.object({}),
   execute: async () => {
-    logger.debug("[工具调用]", "queryWorldMap");
+    logger.info("[工具调用]", "queryWorldMap");
     return {
       dsl: worldMapDsl,
     };
