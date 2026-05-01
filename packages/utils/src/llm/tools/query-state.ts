@@ -7,7 +7,7 @@ import { getTimeWithWeekday } from "../../time";
 
 export const queryStateTool: Tool = {
   description:
-    "查询 state，包括当前时间、ゆいじゅ角色状态、世界天气，以及长期计划和短期计划。返回内容为客观事实。",
+    "查询状态，包括当前时间、角色状态、世界天气，以及长期计划和短期计划。返回内容为客观事实，短时间内状态不会变化，内只用调用一次。",
   inputSchema: z.object({}),
   execute: async () => {
     const characterState = await initCharacterStateData();

@@ -9,6 +9,7 @@ import {
 import type { AgentPlanChange } from "../../types";
 import { generateStructuredOutput } from "../generate-structured-output";
 import { flashModel } from "../models";
+import { createToolCallLoggingHooks } from "../tool-call-logger";
 import { queryStateTool } from "./query-state";
 import { agentPlanChangeSchema } from "./schema";
 
@@ -42,6 +43,9 @@ export async function reviewPlanChanges(
     },
     system: planChangeReviewSystemPrompt,
     stopWhen: stepCountIs(20),
+    ...createToolCallLoggingHooks({
+      scene: "utils.llm.review-plan-changes",
+    }),
     messages: [
       {
         role: "user",

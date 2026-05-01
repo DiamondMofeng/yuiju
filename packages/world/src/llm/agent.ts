@@ -13,6 +13,7 @@ import {
   chooseFoodPrompt,
   chooseShopProductPrompt,
   chooseShrinePrayerPrompt,
+  createToolCallLoggingHooks,
   diarySearchTool,
   flashModel,
   generateStructuredOutput,
@@ -111,6 +112,9 @@ export async function chooseActionAgent(
         }),
         prompt: systemPrompt,
         stopWhen: stepCountIs(20),
+        ...createToolCallLoggingHooks({
+          scene: "world.llm.choose-action",
+        }),
       });
 
       logger.info("[chooseActionAgent] 选择行动结果", output);

@@ -101,11 +101,11 @@ export function buildPrivatePlanProposalPrompt(planState: PlanState): string {
 ${formatPlanStateForMessagePrompt(planState)}
 
 ## 私聊计划提案规则
-只有当私聊内容明确影响悠酱后续安排时，才调用 \`proposePlanChanges\` 提交计划变更提案。
+只有当聊天内容明确影响悠酱后续安排时，才调用 \`proposePlanChanges\` 提交计划变更提案。
 普通聊天、情绪回应、临时问答、寒暄和随口闲聊，不要调用 \`proposePlanChanges\`。
 \`proposePlanChanges\` 只表示提案已提交后台审查，不代表计划已经更新成功。
 调用工具后，不要对用户说“计划已更新”“已加入计划”“已经安排好”等确认生效的话。
-不要在回复里暴露 JSON、工具调用、后台审查或内部计划系统；回复仍然保持自然私聊口吻。
+\`proposePlanChanges\` 只能调用一次
 `.trim();
 }
 

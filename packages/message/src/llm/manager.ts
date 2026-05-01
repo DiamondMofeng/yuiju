@@ -3,6 +3,7 @@ import {
   buildPrivatePlanProposalPrompt,
   chatReplyRulesPrompt,
   createPrivatePlanChangesProposalTool,
+  createToolCallLoggingHooks,
   diarySearchTool,
   flashModel,
   generateStructuredOutput,
@@ -195,6 +196,9 @@ export class LLMManager {
         },
         stopWhen: stepCountIs(20),
         abortSignal: controller.signal,
+        ...createToolCallLoggingHooks({
+          scene: "message.llm.group",
+        }),
         output: Output.object({
           schema: z.object({
             shouldReply: z.boolean().describe("是否回复"),
@@ -283,6 +287,9 @@ export class LLMManager {
         }),
       },
       stopWhen: stepCountIs(20),
+      ...createToolCallLoggingHooks({
+        scene: "message.llm.private",
+      }),
       output: Output.object({
         schema: z.object({
           shouldReply: z.boolean().describe("是否回复"),

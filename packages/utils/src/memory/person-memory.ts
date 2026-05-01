@@ -4,7 +4,7 @@ import { Output, stepCountIs, tool } from "ai";
 import dayjs from "dayjs";
 import { z } from "zod";
 import { getYuijuConfig } from "../config";
-import { generateStructuredOutput } from "../llm";
+import { createToolCallLoggingHooks, generateStructuredOutput } from "../llm";
 import { qwen3Model } from "../llm/models";
 import { logger } from "../logger";
 import { buildPersonMemoryProposalPrompt, buildPersonMemoryReviewPrompt } from "../prompt";
@@ -345,6 +345,9 @@ async function generatePersonMemoryProposal(
       sectionKeys: PERSON_MEMORY_SECTION_KEYS,
     }),
     stopWhen: stepCountIs(20),
+    ...createToolCallLoggingHooks({
+      scene: input.scene,
+    }),
   });
 
   const proposal = normalizeProposal(output);
