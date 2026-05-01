@@ -35,6 +35,7 @@ export interface PersonMemoryUpdateInput {
   displayName: string;
   interactionMaterial: string;
   scene: "private" | "group";
+  interactionCount: number;
 }
 
 export interface PersonMemoryUpdateResult {
@@ -44,7 +45,13 @@ export interface PersonMemoryUpdateResult {
 export interface PersonMemoryDirectoryItem {
   personId: string;
   displayName: string;
-  appellation: string;
+}
+
+export interface PersonMemoryDirectoryResult {
+  items: PersonMemoryDirectoryItem[];
+  page_number: number;
+  total: number;
+  hasMore: boolean;
 }
 
 export interface PersonMemoryContentResult {
@@ -81,6 +88,22 @@ interface PersonMemoryReviewContext {
   proposal: PersonMemoryProposal;
 }
 
+interface PersonMemoryHeatEntry {
+  heat: number;
+  lastInteractedAt: string;
+}
+
+/**
+ * people/person-memory-heat.json 的结构：
+ * {
+ *   [personId]: {
+ *     heat: 累计发言热度,
+ *     lastInteractedAt: 最近一次累计热度的时间
+ *   }
+ * }
+ */
+type PersonMemoryHeatDocument = Record<string, PersonMemoryHeatEntry>;
+
 const personMemorySectionsSchema = z.strictObject({
   称呼: z.string(),
   喜好: z.string(),
@@ -96,6 +119,14 @@ const personMemoryDocumentSchema = z.strictObject({
   lastUpdatedAt: z.string().min(1),
   sections: personMemorySectionsSchema,
 });
+
+const personMemoryHeatSchema = z.record(
+  z.string().min(1),
+  z.strictObject({
+    heat: z.number().finite().nonnegative(),
+    lastInteractedAt: z.string().min(1),
+  }),
+);
 
 const personMemoryProposalSchema = z.strictObject({
   shouldUpdate: z.boolean().describe("这轮是否需要写回人物记忆。"),
@@ -120,6 +151,8 @@ const personMemoryReviewSchema = z.strictObject({
 const listItemPattern = /^\s*(?:[-*]|\d+\.)\s+/;
 const tableRowPattern = /^\s*\|/;
 const nestedHeadingPattern = /^\s*#{1,6}\s+/;
+const PERSON_MEMORY_HEAT_FILENAME = "person-memory-heat.json";
+const PERSON_MEMORY_LIST_PAGE_SIZE = 20;
 
 export class PersonMemoryFormatError extends Error {
   constructor(message: string) {
@@ -149,6 +182,67 @@ export async function getPersonMemoryDirectoryPath(): Promise<string> {
 
 export async function getPersonMemoryFilePath(personId: string): Promise<string> {
   return resolve(await getPersonMemoryDirectoryPath(), `${personId}.json`);
+}
+
+export async function getPersonMemoryHeatFilePath(): Promise<string> {
+  return resolve(await getPersonMemoryDirectoryPath(), PERSON_MEMORY_HEAT_FILENAME);
+}
+
+export async function initializePersonMemoryHeat(): Promise<void> {
+  const rootDir = await getPersonMemoryDirectoryPath();
+  const heatFilePath = await getPersonMemoryHeatFilePath();
+  const filenames = await readdir(rootDir);
+  let heatDocument: PersonMemoryHeatDocument = {};
+  let shouldWriteHeatFile = false;
+
+  try {
+    const stats = await stat(heatFilePath);
+    if (!stats.isFile()) {
+      throw new Error(`人物记忆热度文件路径不是文件：${heatFilePath}`);
+    }
+
+    heatDocument = await readPersonMemoryHeatDocument();
+  } catch (error) {
+    if (!isFileNotFoundError(error)) {
+      throw error;
+    }
+
+    shouldWriteHeatFile = true;
+  }
+
+  for (const filename of filenames.sort()) {
+    if (!filename.endsWith(".json") || filename === PERSON_MEMORY_HEAT_FILENAME) {
+      continue;
+    }
+
+    const personId = filename.slice(0, -5);
+    if (heatDocument[personId]) {
+      continue;
+    }
+
+    try {
+      const content = await readFile(resolve(rootDir, filename), "utf8");
+      const document = parsePersonMemoryJson({
+        content,
+        personId,
+      });
+
+      heatDocument[personId] = {
+        heat: 0,
+        lastInteractedAt: document.lastUpdatedAt,
+      };
+      shouldWriteHeatFile = true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.warn(`[person-memory] 初始化热度时跳过非法人物记忆文件 ${filename}: ${message}`);
+    }
+  }
+
+  if (!shouldWriteHeatFile) {
+    return;
+  }
+
+  await writeFile(heatFilePath, `${JSON.stringify(heatDocument, null, 2)}\n`, "utf8");
 }
 
 export function parsePersonMemoryJson(input: {
@@ -194,14 +288,15 @@ export function parsePersonMemoryJson(input: {
   };
 }
 
-export async function listPersonMemories(): Promise<PersonMemoryDirectoryItem[]> {
+export async function listPersonMemories(page = 1): Promise<PersonMemoryDirectoryResult> {
   const rootDir = await getPersonMemoryDirectoryPath();
   const filenames = await readdir(rootDir);
+  const heatDocument = await readPersonMemoryHeatDocument();
 
   const entries: PersonMemoryDirectoryItem[] = [];
 
   for (const filename of filenames.sort()) {
-    if (!filename.endsWith(".json")) {
+    if (!filename.endsWith(".json") || filename === PERSON_MEMORY_HEAT_FILENAME) {
       continue;
     }
 
@@ -217,7 +312,6 @@ export async function listPersonMemories(): Promise<PersonMemoryDirectoryItem[]>
       entries.push({
         personId,
         displayName: document.sections["称呼"],
-        appellation: document.sections["称呼"],
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -225,7 +319,38 @@ export async function listPersonMemories(): Promise<PersonMemoryDirectoryItem[]>
     }
   }
 
-  return entries;
+  entries.sort((left, right) => {
+    const leftHeat = heatDocument[left.personId]?.heat ?? 0;
+    const rightHeat = heatDocument[right.personId]?.heat ?? 0;
+
+    if (rightHeat !== leftHeat) {
+      return rightHeat - leftHeat;
+    }
+
+    const leftLastInteractedAt = heatDocument[left.personId]?.lastInteractedAt;
+    const rightLastInteractedAt = heatDocument[right.personId]?.lastInteractedAt;
+    const leftLastInteractedAtMs = leftLastInteractedAt ? dayjs(leftLastInteractedAt).valueOf() : 0;
+    const rightLastInteractedAtMs = rightLastInteractedAt
+      ? dayjs(rightLastInteractedAt).valueOf()
+      : 0;
+
+    if (rightLastInteractedAtMs !== leftLastInteractedAtMs) {
+      return rightLastInteractedAtMs - leftLastInteractedAtMs;
+    }
+
+    return left.personId.localeCompare(right.personId);
+  });
+
+  const pageNumber = Number.isFinite(page) ? Math.max(1, Math.floor(page)) : 1;
+  const startIndex = (pageNumber - 1) * PERSON_MEMORY_LIST_PAGE_SIZE;
+  const items = entries.slice(startIndex, startIndex + PERSON_MEMORY_LIST_PAGE_SIZE);
+
+  return {
+    items,
+    page_number: pageNumber,
+    total: entries.length,
+    hasMore: startIndex + PERSON_MEMORY_LIST_PAGE_SIZE < entries.length,
+  };
 }
 
 export async function getPersonMemory(personId: string): Promise<PersonMemoryContentResult | null> {
@@ -259,6 +384,11 @@ export async function updatePersonMemory(
 ): Promise<PersonMemoryUpdateResult> {
   const filePath = await getPersonMemoryFilePath(input.personId);
   let existingMemory: PersonMemoryDocument | null = null;
+
+  await updatePersonMemoryHeat({
+    personId: input.personId,
+    interactionCount: input.interactionCount,
+  });
 
   try {
     const content = await readFile(filePath, "utf8");
@@ -311,6 +441,67 @@ export async function updatePersonMemory(
   return {
     status: existingMemory ? "updated" : "created",
   };
+}
+
+async function readPersonMemoryHeatDocument(): Promise<PersonMemoryHeatDocument> {
+  const filePath = await getPersonMemoryHeatFilePath();
+  let content: string;
+
+  try {
+    content = await readFile(filePath, "utf8");
+  } catch (error) {
+    if (isFileNotFoundError(error)) {
+      return {};
+    }
+
+    throw error;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new PersonMemoryFormatError("人物记忆热度文件不是合法 JSON。");
+  }
+
+  const parsedResult = personMemoryHeatSchema.safeParse(parsed);
+  if (!parsedResult.success) {
+    throw new PersonMemoryFormatError("人物记忆热度 JSON 对象结构不合法。");
+  }
+
+  for (const [personId, item] of Object.entries(parsedResult.data)) {
+    if (!dayjs(item.lastInteractedAt).isValid()) {
+      throw new PersonMemoryFormatError(
+        `人物记忆热度文件中 ${personId} 的 lastInteractedAt 不是合法时间。`,
+      );
+    }
+  }
+
+  return parsedResult.data;
+}
+
+async function updatePersonMemoryHeat(input: {
+  personId: string;
+  interactionCount: number;
+}): Promise<void> {
+  const interactionCount = Math.max(0, Math.floor(input.interactionCount));
+  if (interactionCount === 0) {
+    return;
+  }
+
+  const heatDocument = await readPersonMemoryHeatDocument();
+  const currentHeat = heatDocument[input.personId]?.heat ?? 0;
+
+  heatDocument[input.personId] = {
+    heat: currentHeat + interactionCount,
+    lastInteractedAt: formatProjectTime(new Date(), "YYYY-MM-DDTHH:mm:ssZ"),
+  };
+
+  await writeFile(
+    await getPersonMemoryHeatFilePath(),
+    `${JSON.stringify(heatDocument, null, 2)}\n`,
+    "utf8",
+  );
 }
 
 async function generatePersonMemoryProposal(

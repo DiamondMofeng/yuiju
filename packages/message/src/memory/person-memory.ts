@@ -27,6 +27,7 @@ interface ChatWindowTranscriptItem {
 interface GroupPersonCandidate {
   personId: string;
   displayName: string;
+  interactionCount: number;
 }
 
 export function buildPrivatePersonMemoryUpdateInput(
@@ -40,6 +41,9 @@ export function buildPrivatePersonMemoryUpdateInput(
   return {
     personId: String(counterpartyUserId),
     displayName: state.sessionLabel,
+    interactionCount: state.messages.filter(
+      (message) => message.sender.user_id === counterpartyUserId,
+    ).length,
     interactionMaterial: buildInteractionMaterial({
       scene: "private",
       sessionLabel: state.sessionLabel,
@@ -61,15 +65,20 @@ export function buildGroupPersonMemoryUpdateInputs(
       continue;
     }
 
-    candidateByPersonId.set(String(message.sender.user_id), {
-      personId: String(message.sender.user_id),
+    const personId = String(message.sender.user_id);
+    const existingCandidate = candidateByPersonId.get(personId);
+
+    candidateByPersonId.set(personId, {
+      personId,
       displayName: getProtocolMessageSenderName(message),
+      interactionCount: existingCandidate ? existingCandidate.interactionCount + 1 : 1,
     });
   }
 
   return Array.from(candidateByPersonId.values()).map((candidate) => ({
     personId: candidate.personId,
     displayName: candidate.displayName,
+    interactionCount: candidate.interactionCount,
     interactionMaterial: buildInteractionMaterial({
       scene: "group",
       sessionLabel: state.sessionLabel,

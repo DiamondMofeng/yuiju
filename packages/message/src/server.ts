@@ -1,4 +1,4 @@
-import { connectDB, getYuijuConfig } from "@yuiju/utils";
+import { connectDB, getYuijuConfig, initializePersonMemoryHeat } from "@yuiju/utils";
 import { NCWebsocket } from "node-napcat-ts";
 import { groupMessageHandler } from "./handler/group-message";
 import { noticePokeHandler } from "./handler/notice-poke";
@@ -21,7 +21,11 @@ napcat.on("notice.notify.poke", (context) => noticePokeHandler(context, napcat))
 
 async function main() {
   await connectDB();
+  // 初始化人物记忆
+  await initializePersonMemoryHeat();
+  // 初始化表情
   await stickerState.initialize();
+  // 连接 napcat
   await napcat.connect();
   logger.info("[message.server] 消息服务启动完成");
 }

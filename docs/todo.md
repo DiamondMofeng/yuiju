@@ -1,10 +1,10 @@
 ## TODO
 
-- 长期记忆热度累计与分页查询
 - Action 模块能力拓展
 
 ## 想法
 
+- 按照 DDD 规范，规范现在的 Redis 与 Mongodb 操作
 - 世界概念介绍 function tool
 - 睡觉叫醒机制
 - 实现种菜功能
