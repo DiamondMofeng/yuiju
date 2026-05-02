@@ -69,7 +69,6 @@ export interface YuijuDatabaseConfig {
 export interface YuijuLlmConfig {
   deepseekApiKey: string;
   siliconflowApiKey: string;
-  moonshotApiKey: string;
 }
 
 /**

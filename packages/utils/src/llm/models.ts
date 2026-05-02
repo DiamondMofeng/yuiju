@@ -34,7 +34,7 @@ export const smallModel = wrapLanguageModel({
  * 用于复杂决策、长链路思考的强模型。
  */
 export const strongModel = wrapLanguageModel({
-  model: deepseekProvider("deepseek-reasoner"),
+  model: siliconflow("deepseek-ai/DeepSeek-V3.2"),
   middleware: [],
 });
 
