@@ -82,21 +82,21 @@ export type InventoryItem = {
  *
  * 说明：
  * - `actionStartedAt` 表示本次 action 开始执行的时间；
- * - `actionDurationMinutes` 表示本次 action 的总持续时间；
  * - `waitUntil` 表示本次等待逻辑应结束的绝对时间，用于进程重启后恢复剩余等待时长；
- * - `completionEvent` 会在等待结束后的下一次 tick 继续作为上下文传入。
+ * - `behaviorEpisodeId` 指向开始阶段写入的 running 行为 Episode；
+ * - `startContext` 保存完成结算必须使用的开始上下文。
  */
 export interface RunningActionState {
   /** 当前正在经历等待阶段的 action */
   action: ActionId;
   /** action 开始执行时间 */
   actionStartedAt: string;
-  /** action 总持续时间（分钟） */
-  actionDurationMinutes: number;
   /** 等待逻辑的目标结束时间 */
   waitUntil: string;
-  /** 下一次 tick 使用的完成事件上下文 */
-  completionEvent?: string;
+  /** 开始阶段写入的 behavior Episode id */
+  behaviorEpisodeId: string;
+  /** 完成结算需要读取的开始上下文 */
+  startContext?: Record<string, unknown>;
 }
 
 export interface CharacterStateData {

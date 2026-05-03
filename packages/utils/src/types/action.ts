@@ -1,5 +1,5 @@
 import type { AgentPlanChange } from "./plan";
-import type { ICharacterState, IWorldState } from "./state";
+import type { ICharacterState, IWorldState, RunningActionState } from "./state";
 
 export enum ActionId {
   /** 起床 */
@@ -14,6 +14,8 @@ export enum ActionId {
   Stay_At_Home = "待在家里",
   /** 吃晚餐 */
   Eat_Dinner = "吃晚餐",
+  /** 做饭 */
+  Cook_At_Home = "做饭",
   /** 睡觉 */
   Sleep = "睡觉",
 
@@ -109,6 +111,19 @@ export interface ActionAgentDecision {
   planChanges?: AgentPlanChange[];
 }
 
+export type ActionStartResult = void | {
+  executionResult?: string;
+  startContext?: Record<string, unknown>;
+};
+
+export type ActionCompletionEventResult = void | {
+  completionContext?: Record<string, unknown>;
+  eventDescription?: string;
+};
+
+/**
+ * 原子行为配置
+ */
 export abstract class ActionMetadata {
   abstract action: ActionId;
   /** action 描述 */
@@ -120,7 +135,7 @@ export abstract class ActionMetadata {
   abstract executor: (
     context: ActionContext,
     selectedAction: ActionAgentDecision,
-  ) => Promise<void | string>;
+  ) => Promise<ActionStartResult>;
 
   /** 行动耗时 min，支持基于本次决策结果做动态计算 */
   abstract durationMin:
@@ -132,9 +147,10 @@ export abstract class ActionMetadata {
    * 该描述将作为事件 context 输入给下一次 tick 的 LLM，用于说明上一个动作结束时的状态或发生的事件。
    * 示例："闹钟响了，该起床了" 或 (ctx) => `你结束了${ctx.action}，感觉焕然一新`
    */
-  abstract completionEvent?:
-    | string
-    | ((context: ActionContext, selectedAction?: ActionAgentDecision) => string | Promise<string>);
+  abstract completionEvent?: (
+    context: ActionContext,
+    runningAction: RunningActionState,
+  ) => ActionCompletionEventResult | Promise<ActionCompletionEventResult>;
 }
 
 export interface BehaviorRecord {

@@ -65,13 +65,13 @@ export const shopAction: ActionMetadata[] = [
       );
       if (!selectedProduct) {
         logger.error("[Buy_Item_At_Shop] 没有选择商品");
-        return "购买失败，没有选择商品。";
+        return { executionResult: "购买失败，没有选择商品。" };
       }
 
       const product = SHOP_PRODUCTS.find((p) => p.name === selectedProduct.value);
       if (!product) {
         logger.error(`[Buy_Item_At_Shop] 未找到商品: ${selectedProduct.value}`);
-        return "购买失败，未找到商品。";
+        return { executionResult: "购买失败，未找到商品。" };
       }
 
       const desiredQuantity = selectedProduct.quantity ?? 1;
@@ -80,7 +80,7 @@ export const shopAction: ActionMetadata[] = [
         logger.info(
           `[Buy_Item_At_Shop] 余额不足，跳过购买: ${product.name}（单价${product.price}元，余额${remainingMoney}元）`,
         );
-        return "购买失败，余额不足。";
+        return { executionResult: "购买失败，余额不足。" };
       }
 
       const quantity = Math.min(Math.max(1, desiredQuantity), maxAffordable);
@@ -113,7 +113,7 @@ export const shopAction: ActionMetadata[] = [
         `[Buy_Item_At_Shop] 购买成功: ${product.name} x${quantity}，花费${cost}元，剩余${remainingMoney}元`,
       );
 
-      return `买了${product.name}${quantity}个，花费${cost}元`;
+      return { executionResult: `买了${product.name}${quantity}个，花费${cost}元` };
     },
     durationMin: 10,
   },

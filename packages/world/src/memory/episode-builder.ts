@@ -2,6 +2,7 @@ import type {
   ActionAgentDecision,
   ActionContext,
   MemoryEpisode,
+  RunningActionState,
   WeatherSnapshot,
 } from "@yuiju/utils";
 import { ActionId, SUBJECT_NAME } from "@yuiju/utils";
@@ -10,16 +11,21 @@ export interface BuildBehaviorEpisodeInput {
   context: ActionContext;
   selectedAction: ActionAgentDecision;
   executionResult?: string;
+  startContext?: Record<string, unknown>;
   durationMinutes: number;
   happenedAt: Date;
   isDev: boolean;
 }
 
-interface BehaviorEpisodePayload {
+export interface BehaviorEpisodePayload extends Record<string, unknown> {
   action: ActionId;
+  status: "running" | "completed";
   reason: string;
   executionResult?: string;
   durationMinutes: number;
+  startContext?: Record<string, unknown>;
+  completionContext?: Record<string, unknown>;
+  eventDescription?: string;
   location: ActionContext["characterState"]["location"];
   characterStateSnapshot: ReturnType<ActionContext["characterState"]["log"]>;
 }
@@ -30,13 +36,13 @@ interface WeatherChangedEpisodePayload {
 }
 
 /**
- * 构建行为 Episode。
+ * 构建开始运行中的行为 Episode。
  *
  * 说明：
  * - 当前只负责把 world 领域上下文映射为统一 Episode；
  * - 不负责真正写入 Graphiti，写入动作由上层 writer 决定。
  */
-export function buildBehaviorEpisode(
+export function buildRunningBehaviorEpisode(
   input: BuildBehaviorEpisodeInput,
 ): MemoryEpisode<BehaviorEpisodePayload> | null {
   if (input.selectedAction.action === ActionId.Idle) {
@@ -44,10 +50,10 @@ export function buildBehaviorEpisode(
   }
 
   const summaryText = [
-    `悠酱执行了行为「${input.selectedAction.action}」`,
+    `悠酱开始执行行为「${input.selectedAction.action}」`,
     `原因：${input.selectedAction.reason}`,
-    input.executionResult ? `结果：${input.executionResult}` : undefined,
-    `持续时间：${input.durationMinutes} 分钟`,
+    input.executionResult ? `开始结果：${input.executionResult}` : undefined,
+    `预计持续时间：${input.durationMinutes} 分钟`,
   ]
     .filter(Boolean)
     .join("；");
@@ -61,9 +67,52 @@ export function buildBehaviorEpisode(
     isDev: input.isDev,
     payload: {
       action: input.selectedAction.action,
+      status: "running",
       reason: input.selectedAction.reason,
       executionResult: input.executionResult,
       durationMinutes: input.durationMinutes,
+      startContext: input.startContext,
+      location: input.context.characterState.location,
+      characterStateSnapshot: input.context.characterState.log(),
+    },
+  };
+}
+
+export interface BuildCompletedBehaviorEpisodeUpdateInput {
+  context: ActionContext;
+  runningAction: RunningActionState;
+  runningPayload: BehaviorEpisodePayload;
+  completionContext?: Record<string, unknown>;
+  eventDescription?: string;
+}
+
+export function buildCompletedBehaviorEpisodeUpdate(
+  input: BuildCompletedBehaviorEpisodeUpdateInput,
+): Pick<MemoryEpisode<BehaviorEpisodePayload>, "summaryText" | "payload"> {
+  const durationMinutes =
+    typeof input.runningPayload.durationMinutes === "number"
+      ? input.runningPayload.durationMinutes
+      : Math.max(
+          0,
+          Math.round(
+            (Date.parse(input.runningAction.waitUntil) -
+              Date.parse(input.runningAction.actionStartedAt)) /
+              60000,
+          ),
+        );
+
+  const summaryText = input.eventDescription ?? `完成了行为「${input.runningAction.action}」`;
+
+  return {
+    summaryText,
+    payload: {
+      ...input.runningPayload,
+      action: input.runningAction.action,
+      status: "completed",
+      durationMinutes,
+      startContext: input.runningAction.startContext ?? input.runningPayload.startContext,
+      completionContext: input.completionContext,
+      eventDescription: input.eventDescription,
       location: input.context.characterState.location,
       characterStateSnapshot: input.context.characterState.log(),
     },

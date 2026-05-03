@@ -92,13 +92,13 @@ export const cafeAction: ActionMetadata[] = [
       );
       if (!selectedCoffee) {
         logger.error("[Order_Coffee] 没有选择咖啡");
-        return "点单失败，没有选择咖啡。";
+        return { executionResult: "点单失败，没有选择咖啡。" };
       }
 
       const coffee = CAFE_COFFEES.find((p) => p.name === selectedCoffee.value);
       if (!coffee) {
         logger.error(`[Order_Coffee] 未找到咖啡: ${selectedCoffee.value}`);
-        return "点单失败，未找到咖啡。";
+        return { executionResult: "点单失败，未找到咖啡。" };
       }
 
       const cost = coffee.price;
@@ -106,7 +106,7 @@ export const cafeAction: ActionMetadata[] = [
         logger.info(
           `[Order_Coffee] 余额不足，跳过点单: ${coffee.name}（单价${coffee.price}元，余额${context.characterState.money}元）`,
         );
-        return "点单失败，余额不足。";
+        return { executionResult: "点单失败，余额不足。" };
       }
 
       await context.characterState.changeMoney(-cost);
@@ -128,10 +128,12 @@ export const cafeAction: ActionMetadata[] = [
 
       logger.info(`[Order_Coffee] 点单成功: ${coffee.name}，花费${cost}元`);
 
-      return `点了${coffee.name}，花费${cost}元`;
+      return { executionResult: `点了${coffee.name}，花费${cost}元` };
     },
     durationMin: 10,
-    completionEvent: "咖啡制作完成",
+    async completionEvent() {
+      return { eventDescription: "咖啡制作完成" };
+    },
   },
   {
     action: ActionId.Drink_Coffee,
@@ -145,12 +147,12 @@ export const cafeAction: ActionMetadata[] = [
       const availableCoffeeNames = getAvailableCafeCoffeeNames(context);
       const coffeeName = availableCoffeeNames[0];
       if (!coffeeName) {
-        return "没有咖啡可以喝。";
+        return { executionResult: "没有咖啡可以喝。" };
       }
 
       const consumed = await context.characterState.consumeItem(coffeeName, 1);
       if (!consumed) {
-        return `喝咖啡失败，没有喝到${coffeeName}。`;
+        return { executionResult: `喝咖啡失败，没有喝到${coffeeName}。` };
       }
 
       const coffee = CAFE_COFFEES.find((item) => item.name === coffeeName);
@@ -168,7 +170,7 @@ export const cafeAction: ActionMetadata[] = [
         result.push(`[心情+${coffee?.mood}]`);
       }
 
-      return `喝了${coffeeName}${result.join(",")}`;
+      return { executionResult: `喝了${coffeeName}${result.join(",")}` };
     },
     durationMin: 30,
   },
@@ -187,7 +189,7 @@ export const cafeAction: ActionMetadata[] = [
       await context.characterState.changeStamina(-10);
       await context.characterState.changeSatiety(-10);
       await context.characterState.changeMood(-5);
-      return "打工1小时，赚了200元";
+      return { executionResult: "打工1小时，赚了200元" };
     },
     durationMin: 60,
   },

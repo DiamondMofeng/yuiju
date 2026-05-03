@@ -2,8 +2,8 @@ import {
   type ActionContext,
   ActionId,
   type ActionMetadata,
-  type ChoiceOption,
   allTrue,
+  type ChoiceOption,
   type FoodMetadata,
   planManager,
 } from "@yuiju/utils";
@@ -71,7 +71,7 @@ export const anywhereAction: ActionMetadata[] = [
     async executor(context) {
       const foodList = getAvailableFoodOptions(context);
       if (foodList.length === 0) {
-        return "没有可吃的食物。";
+        return { executionResult: "没有可吃的食物。" };
       }
 
       // 设置当前动作
@@ -95,7 +95,7 @@ export const anywhereAction: ActionMetadata[] = [
         });
 
       if (!selectedFoodList || selectedFoodList.length === 0) {
-        return "没有选择要吃的食物。";
+        return { executionResult: "没有选择要吃的食物。" };
       }
 
       const eatenSummary: string[] = [];
@@ -138,10 +138,10 @@ export const anywhereAction: ActionMetadata[] = [
       }
 
       if (eatenSummary.length === 0) {
-        return "尝试吃东西，但都没吃成功。";
+        return { executionResult: "尝试吃东西，但都没吃成功。" };
       }
 
-      return `吃了${eatenSummary.join("，")}`;
+      return { executionResult: `吃了${eatenSummary.join("，")}` };
     },
 
     durationMin: 10,

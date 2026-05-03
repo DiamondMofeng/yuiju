@@ -62,7 +62,9 @@ export const coastAction: ActionMetadata[] = [
       await context.characterState.setAction(ActionId.Walk_In_Coast);
       await context.characterState.changeMood(selectedTier.moodGain);
 
-      return `在月汐海岸散步了${selectedTier.durationMin}分钟，心情提升了${selectedTier.moodGain}点`;
+      return {
+        executionResult: `在月汐海岸散步了${selectedTier.durationMin}分钟，心情提升了${selectedTier.moodGain}点`,
+      };
     },
     async durationMin(_context, selectedAction?: ActionAgentDecision) {
       return resolveCoastWalkTier(selectedAction?.durationMinute).durationMin;

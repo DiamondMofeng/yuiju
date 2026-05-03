@@ -64,7 +64,9 @@ export const parkAction: ActionMetadata[] = [
       await context.characterState.setAction(ActionId.Walk_In_Park);
       await context.characterState.changeMood(selectedTier.moodGain);
 
-      return `在南风公园散步了${selectedTier.durationMin}分钟，心情提升了${selectedTier.moodGain}点`;
+      return {
+        executionResult: `在南风公园散步了${selectedTier.durationMin}分钟，心情提升了${selectedTier.moodGain}点`,
+      };
     },
     async durationMin(_context, selectedAction?: ActionAgentDecision) {
       return resolveParkWalkTier(selectedAction?.durationMinute).durationMin;

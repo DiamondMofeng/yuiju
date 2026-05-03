@@ -135,17 +135,15 @@ const parseRunningActionState = (value: unknown): RunningActionState | null => {
     return null;
   }
 
-  if (
-    typeof maybeRunningAction.actionDurationMinutes !== "number" ||
-    !Number.isFinite(maybeRunningAction.actionDurationMinutes) ||
-    maybeRunningAction.actionDurationMinutes < 0
-  ) {
+  if (typeof maybeRunningAction.behaviorEpisodeId !== "string") {
     return null;
   }
 
   if (
-    maybeRunningAction.completionEvent !== undefined &&
-    typeof maybeRunningAction.completionEvent !== "string"
+    maybeRunningAction.startContext !== undefined &&
+    (!maybeRunningAction.startContext ||
+      typeof maybeRunningAction.startContext !== "object" ||
+      Array.isArray(maybeRunningAction.startContext))
   ) {
     return null;
   }
@@ -153,9 +151,9 @@ const parseRunningActionState = (value: unknown): RunningActionState | null => {
   return {
     action: maybeRunningAction.action,
     actionStartedAt: maybeRunningAction.actionStartedAt,
-    actionDurationMinutes: maybeRunningAction.actionDurationMinutes,
     waitUntil: maybeRunningAction.waitUntil,
-    completionEvent: maybeRunningAction.completionEvent,
+    behaviorEpisodeId: maybeRunningAction.behaviorEpisodeId,
+    startContext: maybeRunningAction.startContext,
   };
 };
 

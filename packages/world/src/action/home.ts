@@ -1,6 +1,18 @@
-import { ActionId, type ActionMetadata, allTrue, isDev, MajorScene } from "@yuiju/utils";
+import {
+  type ActionContext,
+  ActionId,
+  type ActionMetadata,
+  allTrue,
+  type ChoiceOption,
+  type FoodMetadata,
+  isDev,
+  MajorScene,
+  planManager,
+} from "@yuiju/utils";
+import { chooseFoodAgent } from "@/llm/agent";
 import { generateDiaryForDate, resolveDiaryDateForSleep } from "@/memory/diary";
 import { logger } from "@/utils/logger";
+import { resolveFoodRecoveryPerUnit } from "../utils/food-utils";
 import {
   isAfternoon,
   isEvening,
@@ -10,6 +22,75 @@ import {
   isWeekend,
   notDoneToday,
 } from "./utils";
+
+type CookingIngredientSnapshot = {
+  name: string;
+  quantity: number;
+  metadata?: FoodMetadata;
+};
+
+type CookingStartContext = {
+  ingredients: CookingIngredientSnapshot[];
+};
+
+function getAvailableCookingIngredientOptions(context: ActionContext): ChoiceOption[] {
+  const inventory = context.characterState.inventory || [];
+  return inventory
+    .filter((item) => item.category === "food" && item.quantity > 0)
+    .map((item): ChoiceOption => {
+      return {
+        value: item.name,
+        description: `${item.description}（剩余${item.quantity}个）`,
+        extra: {
+          metadata: item.metadata,
+          availableQuantity: item.quantity,
+        },
+      };
+    });
+}
+
+function readCookingStartContext(
+  startContext: Record<string, unknown> | undefined,
+): CookingStartContext | null {
+  const ingredients = startContext?.ingredients;
+  if (!Array.isArray(ingredients)) {
+    return null;
+  }
+
+  const parsedIngredients = ingredients
+    .map((ingredient): CookingIngredientSnapshot | null => {
+      if (!ingredient || typeof ingredient !== "object") {
+        return null;
+      }
+
+      const maybeIngredient = ingredient as Partial<CookingIngredientSnapshot>;
+      if (typeof maybeIngredient.name !== "string") {
+        return null;
+      }
+
+      if (
+        typeof maybeIngredient.quantity !== "number" ||
+        !Number.isFinite(maybeIngredient.quantity) ||
+        maybeIngredient.quantity <= 0
+      ) {
+        return null;
+      }
+
+      return {
+        name: maybeIngredient.name,
+        quantity: maybeIngredient.quantity,
+        metadata:
+          maybeIngredient.metadata &&
+          typeof maybeIngredient.metadata === "object" &&
+          !Array.isArray(maybeIngredient.metadata)
+            ? (maybeIngredient.metadata as FoodMetadata)
+            : undefined,
+      };
+    })
+    .filter((ingredient): ingredient is CookingIngredientSnapshot => Boolean(ingredient));
+
+  return parsedIngredients.length > 0 ? { ingredients: parsedIngredients } : null;
+}
 
 export const homeAction: ActionMetadata[] = [
   {
@@ -38,7 +119,9 @@ export const homeAction: ActionMetadata[] = [
       await context.characterState.setAction(ActionId.Sleep);
       await context.characterState.changeMood(1);
     },
-    completionEvent: "闹钟响了",
+    async completionEvent() {
+      return { eventDescription: "闹钟响了" };
+    },
     durationMin: 10,
   },
   {
@@ -134,6 +217,147 @@ export const homeAction: ActionMetadata[] = [
     durationMin: 20,
   },
   {
+    action: ActionId.Cook_At_Home,
+    description: "在家做饭，从背包中选择食材，完成后获得料理。[耗时30分钟]",
+    precondition(context) {
+      // TODO：这个 Action 先关闭
+      return false;
+
+      // const hour = context.worldState.time.get("hour");
+      // const minute = context.worldState.time.get("minute");
+      // const minutesOfDay = hour * 60 + minute;
+      // return allTrue([
+      //   () => context.characterState.location.major === MajorScene.Home,
+      //   () =>
+      //     (minutesOfDay >= 6 * 60 + 30 && minutesOfDay < 8 * 60 + 30) ||
+      //     (minutesOfDay >= 11 * 60 && minutesOfDay < 13 * 60) ||
+      //     (minutesOfDay >= 17 * 60 && minutesOfDay < 19 * 60),
+      //   () => getAvailableCookingIngredientOptions(context).length > 0,
+      // ]);
+    },
+    async executor(context) {
+      await context.characterState.setAction(ActionId.Cook_At_Home);
+
+      const ingredientOptions = getAvailableCookingIngredientOptions(context);
+      if (ingredientOptions.length === 0) {
+        return { executionResult: "没有可以用来做饭的食材。" };
+      }
+
+      // TODO：这里应该是一个单独选择做饭食材的 Agent
+      const selectedIngredients = await chooseFoodAgent(
+        ingredientOptions,
+        context,
+        [],
+        await planManager.getState(),
+      );
+
+      if (!selectedIngredients?.length) {
+        return { executionResult: "没有选择做饭食材。" };
+      }
+
+      const ingredients: CookingIngredientSnapshot[] = [];
+
+      for (const selectedIngredient of selectedIngredients) {
+        const ingredientOption = ingredientOptions.find(
+          (option) => option.value === selectedIngredient.value,
+        );
+        if (!ingredientOption) {
+          continue;
+        }
+
+        const availableQuantity =
+          typeof ingredientOption.extra?.availableQuantity === "number"
+            ? ingredientOption.extra.availableQuantity
+            : 1;
+        const quantity = Math.min(Math.max(1, selectedIngredient.quantity || 1), availableQuantity);
+        const consumed = await context.characterState.consumeItem(
+          selectedIngredient.value,
+          quantity,
+        );
+        if (!consumed) {
+          logger.error(`[Cook_At_Home] 消费食材失败: ${selectedIngredient.value} x${quantity}`);
+          continue;
+        }
+
+        ingredients.push({
+          name: selectedIngredient.value,
+          quantity,
+          metadata:
+            ingredientOption.extra?.metadata &&
+            typeof ingredientOption.extra.metadata === "object" &&
+            !Array.isArray(ingredientOption.extra.metadata)
+              ? (ingredientOption.extra.metadata as FoodMetadata)
+              : undefined,
+        });
+      }
+
+      if (ingredients.length === 0) {
+        return { executionResult: "做饭失败，没有成功准备食材。" };
+      }
+
+      return {
+        startContext: {
+          ingredients,
+        },
+      };
+    },
+    durationMin: 30,
+    async completionEvent(context, runningAction) {
+      const cookingContext = readCookingStartContext(runningAction.startContext);
+      if (!cookingContext) {
+        return { eventDescription: "料理没有做成功。" };
+      }
+
+      const ingredientNames = cookingContext.ingredients.map((ingredient) => ingredient.name);
+      const producedName =
+        cookingContext.ingredients.length === 1 ? `${ingredientNames[0]}料理` : "家常料理";
+
+      let stamina = 0;
+      let satiety = 0;
+      let mood = 0;
+
+      for (const ingredient of cookingContext.ingredients) {
+        const recovery = resolveFoodRecoveryPerUnit(ingredient.metadata);
+        stamina += recovery.stamina * ingredient.quantity;
+        satiety += recovery.satiety * ingredient.quantity;
+        mood += recovery.mood * ingredient.quantity;
+      }
+
+      const metadata: FoodMetadata = {};
+      if (stamina !== 0) {
+        metadata.stamina = stamina;
+      }
+      if (satiety !== 0) {
+        metadata.satiety = satiety;
+      }
+      if (mood !== 0) {
+        metadata.mood = mood;
+      }
+
+      await context.characterState.addItem(
+        {
+          name: producedName,
+          description: `用${ingredientNames.join("、")}做出的料理。`,
+          category: "food",
+          metadata,
+        },
+        1,
+      );
+
+      return {
+        completionContext: {
+          producedItem: {
+            name: producedName,
+            quantity: 1,
+            metadata,
+          },
+          ingredients: cookingContext.ingredients,
+        },
+        eventDescription: `用${ingredientNames.join("、")}做出了一份${producedName}`,
+      };
+    },
+  },
+  {
     action: ActionId.Stay_At_Home,
     description: "待在家中，放松、学习。[体力+20][饱腹-10][心情+5][耗时60分钟]",
     precondition(context) {
@@ -178,6 +402,8 @@ export const homeAction: ActionMetadata[] = [
 
       return target.diff(now, "minute");
     },
-    completionEvent: "闹钟响了",
+    async completionEvent() {
+      return { eventDescription: "闹钟响了" };
+    },
   },
 ];

@@ -40,14 +40,20 @@ export const shrineAction: ActionMetadata[] = [
 
         const wish = prayerDecision?.wish?.trim();
         if (wish) {
-          return `在结灯神社投了${SHRINE_OFFERING_COST}元香火钱，祈愿“${wish}”，心情提升了${SHRINE_OFFERING_MOOD_GAIN}点`;
+          return {
+            executionResult: `在结灯神社投了${SHRINE_OFFERING_COST}元香火钱，祈愿“${wish}”，心情提升了${SHRINE_OFFERING_MOOD_GAIN}点`,
+          };
         }
 
-        return `在结灯神社投了${SHRINE_OFFERING_COST}元香火钱，认真祈愿，心情提升了${SHRINE_OFFERING_MOOD_GAIN}点`;
+        return {
+          executionResult: `在结灯神社投了${SHRINE_OFFERING_COST}元香火钱，认真祈愿，心情提升了${SHRINE_OFFERING_MOOD_GAIN}点`,
+        };
       }
 
       await context.characterState.changeMood(SHRINE_PRAY_MOOD_GAIN);
-      return `在结灯神社认真参拜，心情提升了${SHRINE_PRAY_MOOD_GAIN}点`;
+      return {
+        executionResult: `在结灯神社认真参拜，心情提升了${SHRINE_PRAY_MOOD_GAIN}点`,
+      };
     },
     durationMin: 10,
   },
