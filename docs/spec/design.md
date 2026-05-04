@@ -1,98 +1,211 @@
 # 技术方案
 
-## 待重构 Action 盘点
+## 主动消息触发能力
 
-运行状态与完成结算能力完成后，后续 Action 应逐步从“开始阶段立即结算”迁移到“开始阶段记录上下文，完成阶段结算结果”。
+### 结论
 
-### 优先重构
+- 主动分享是 world 侧能力，不是 message 侧能力。
+- 第一版只做固定目标群聊，不做私聊、多群、渠道选择。
+- message 只提供“获取群聊上下文”和“发送并记录消息”。
+- world 不落库主动分享结果；真实消息由 message 现有消息记录保存。
 
-这些 Action 当前把持续过程结束后的收益或消耗提前写在 `executor` 中，最适合迁移到 `completionEvent`。
+### 主流程
 
-- `Study_At_School`
-  - 当前问题：开始上课时立即扣体力、饱腹和心情。
-  - 建议调整：`executor` 只设置正在学习；`completionEvent` 在学习结束时结算消耗，并返回放学或学习结束事件。
+```text
+Action 完成
+  -> completionEvent 完成结算
+  -> 更新 behavior episode
+  -> world 判断该 Action 是否值得进入主动分享流程
+  -> world 调度主动分享异步任务
+  -> 清理 runningAction
 
-- `Work_At_Cafe`
-  - 当前问题：开始打工时立即发工资，并立即扣体力、饱腹和心情。
-  - 建议调整：`executor` 只设置正在打工；`completionEvent` 在打工结束时结算工资和消耗。
+主动分享异步任务
+  -> world 选择目标群聊（第一版读取配置，未来由 LLM 决策）
+  -> message 获取目标群最近消息
+  -> world LLM 判断是否分享并生成消息
+  -> shouldSend=false：结束
+  -> shouldSend=true：message 发送并记录群消息
+```
 
-- `Walk_In_Park`
-  - 当前问题：开始散步时立即增加心情。
-  - 建议调整：`executor` 保存本次选择的散步时长档位；`completionEvent` 按开始时保存的档位结算心情收益。
+主动分享是异步副作用，不能阻塞 runningAction 清理，也不能影响下一次 tick 的 `eventDescription`。
 
-- `Walk_In_Coast`
-  - 当前问题：开始散步时立即增加心情。
-  - 建议调整：`executor` 保存本次选择的散步时长档位；`completionEvent` 按开始时保存的档位结算心情收益。
+### 模块边界
 
-- `Pray_At_Shrine`
-  - 当前问题：参拜开始时立即结算心情收益。
-  - 建议调整：投币属于开始阶段副作用，可以继续保留在 `executor`；心情收益迁移到 `completionEvent` 结算。
+world 负责：
 
-### 可后续重构
+- 识别 Action 完成后的生活事件。
+- 调度主动分享异步任务。
+- 获取群聊上下文作为 LLM 输入。
+- 调 LLM 判断是否分享、生成消息。
+- 调 message 发送群消息。
 
-这些 Action 是短耗时或偏即时行为，迁移收益没有持续型 Action 明显，但为了行为模型一致，可以后续逐步收敛。
+message 负责：
 
-- `Eat_Breakfast`
-  - 当前问题：开始吃早餐时立即恢复饱腹和体力，并标记今日已吃早餐。
-  - 建议调整：`executor` 设置正在吃早餐；`completionEvent` 恢复状态并标记完成。
+- 返回目标群最近消息上下文。
+- 发送群消息。
+- 回读已发送消息。
+- 记录到现有群聊会话历史。
 
-- `Eat_Lunch`
-  - 当前问题：开始吃午饭时立即恢复饱腹和体力，并标记今日已吃午饭。
-  - 建议调整：`executor` 设置正在吃午饭；`completionEvent` 恢复状态并标记完成。
+message 不负责：
 
-- `Eat_Dinner`
-  - 当前问题：开始吃晚餐时立即恢复饱腹和体力，并标记今日已吃晚餐。
-  - 建议调整：`executor` 设置正在吃晚餐；`completionEvent` 恢复状态并标记完成。
+- 判断悠酱是否想分享生活。
+- 理解 Action / completionEvent / 世界状态。
+- 调主动分享决策 LLM。
 
-- `Eat_Item`
-  - 当前问题：开始吃东西时立即消费物品并恢复状态。
-  - 建议调整：消费物品建议保留在开始阶段，避免等待期间物品变化；恢复体力、饱腹和心情可迁移到 `completionEvent`。
+### 决策时机
 
-- `Drink_Coffee`
-  - 当前问题：开始喝咖啡时立即消费咖啡并恢复状态。
-  - 建议调整：消费咖啡建议保留在开始阶段；恢复体力、饱腹和心情可迁移到 `completionEvent`。
+- 第一版在 Action 完成后决策。
+- 不在 Action 选择阶段保存主动消息意图。
+- 原因：完成时有真实结果，也能拿到最新群聊上下文。
 
-- `Buy_Item_At_Shop`
-  - 当前问题：购买开始时立即扣钱并把商品放入背包。
-  - 建议调整：扣钱可保留在开始阶段；如果语义表达为“购买后等待交付”，商品入背包可迁移到 `completionEvent`。如果语义表达为“购买即拿到”，可以暂时保持现状。
+### 目标群
 
-- `Order_Coffee`
-  - 当前问题：已有 `completionEvent` 表达“咖啡制作完成”，但咖啡在 `executor` 阶段已经进入背包，语义不一致。
-  - 建议调整：开始阶段扣钱并记录点单咖啡；`completionEvent` 在制作完成后把咖啡写入背包。
+- 第一版在 `yuiju.config.ts` 中显式配置目标群。
+- 不从 `groupWhiteList` 隐式选择。
+- 未来由 world 侧 LLM 在候选群聊中决策发送目标。
 
-- `Sleep`
-  - 当前问题：已有 `completionEvent` 返回闹钟事件，但睡眠恢复效果还没有在完成阶段结算。
-  - 建议调整：`executor` 只记录开始睡眠；`completionEvent` 根据实际睡眠时长恢复体力和心情，并返回醒来事件。
+```ts
+message: {
+  proactive: {
+    groupTargetId: 123456,
+  },
+}
+```
 
-- `Sleep_For_A_Little`
-  - 当前问题：已有 `completionEvent` 返回闹钟事件，但小睡恢复效果还没有在完成阶段结算。
-  - 建议调整：`executor` 只记录开始小睡；`completionEvent` 根据实际小睡时长恢复体力和心情，并返回醒来事件。
+### 候选目标接口
 
-### 暂不建议重构
+第一版只传一个固定群聊目标，但接口保留未来多目标扩展。
 
-移动类 Action 当前在 `executor` 中直接更新位置。严格来说，位置应在到达时更新，但这会影响场景判断、可执行 Action 列表和移动过程建模，范围较大，建议后续单独设计移动能力。
+```ts
+interface ProactiveMessageTargetCandidate {
+  type: "group" | "private";
+  id: number;
+  label: string;
+  recentContext?: {
+    summary?: string;
+    historyJson: string;
+  };
+}
+```
 
-暂不迁移的移动类 Action：
+第一版只构造：
 
-- `Go_To_School_From_Home`
-- `Go_To_Shop_From_Home`
-- `Go_To_Cafe_From_Home`
-- `Go_To_Park_From_Home`
-- `Go_Home_From_School`
-- `Go_To_Shop_From_School`
-- `Go_To_Cafe_From_School`
-- `Go_Home_From_Shop`
-- `Go_To_School_From_Shop`
-- `Go_To_Coast_From_Shop`
-- `Go_To_Shop_From_Coast`
-- `Go_Home_From_Park`
-- `Go_To_Shrine_From_Park`
-- `Go_To_Park_From_Shrine`
-- `Go_Home_From_Cafe`
-- `Go_To_School_From_Cafe`
+```ts
+[
+  {
+    type: "group",
+    id: config.message.proactive.groupTargetId,
+    label: "目标群聊",
+    recentContext: { summary, historyJson },
+  },
+];
+```
 
-### 已基本符合新模式
+### LLM 输出
 
-- `Cook_At_Home`
-  - 开始阶段选择并保存食材上下文。
-  - 完成阶段读取开始上下文并产出料理。
+第一版目标固定，不让 LLM 选渠道。
+
+```ts
+interface ProactiveGroupMessageDecision {
+  shouldSend: boolean;
+  reason: string;
+  message: string;
+}
+```
+
+未来多目标时再扩展：
+
+```ts
+interface ProactiveMessageDecision {
+  shouldSend: boolean;
+  target?: {
+    type: "group" | "private";
+    id: number;
+  };
+  reason: string;
+  message: string;
+}
+```
+
+### LLM 输入
+
+包含：
+
+- Action 完成结果。
+- completionContext。
+- 当前时间、地点、角色状态摘要。
+- 目标群最近消息摘要和结构化历史。
+- 悠酱角色设定与群聊回复规则。
+
+要求：
+
+- 判断当前群聊是否适合插入这条生活分享。
+- 生成自然群聊消息，不要像系统通知。
+- 不提 Action、completionEvent、触发记录等内部概念。
+
+### Action 入口规则
+
+world 不对所有 Action 都调用主动分享 LLM。
+
+第一版只处理明确有结果的 Action，例如：
+
+- `Cook_At_Home` 完成并产出料理。
+- `Work_At_Cafe` 完成并结算工资。
+
+普通移动、发呆、短暂停留不进入主动分享流程。
+
+### 行为完成链路
+
+在 `recoverRunningAction` 中只调度异步任务，不等待发送完成：
+
+```text
+completionEvent
+  -> buildCompletedBehaviorEpisodeUpdate
+  -> updateMemoryEpisodeById
+  -> scheduleActionCompletionProactiveShare
+  -> clearRunningAction
+```
+
+### message 能力接口
+
+```ts
+interface GroupConversationContext {
+  groupId: number;
+  groupLabel: string;
+  summary?: string;
+  historyJson: string;
+}
+
+async function getGroupConversationContext(input: {
+  groupId: number;
+  limit?: number;
+}): Promise<GroupConversationContext>;
+```
+
+```ts
+async function sendAndRecordGroupProactiveMessage(input: {
+  groupId: number;
+  message: string;
+  sessionLabel: string;
+}): Promise<{
+  sentMessageIds: number[];
+}>;
+```
+
+### 真相源
+
+- Action 完成事实：world behavior episode。
+- 实际发出的消息：message 回读并记录的群消息。
+- 主动分享决策：第一版不长期落库，只打克制日志。
+
+### 第一版不做
+
+- 主动分享结果落库。
+- 复杂任务状态机。
+- 延迟发送。
+- 失败自动重试。
+- Redis 去重与节流。
+- 私聊主动消息。
+- 多群目标选择。
+- LLM 选择发送渠道。
+- 主动消息修改角色状态。

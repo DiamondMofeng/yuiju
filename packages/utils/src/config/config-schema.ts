@@ -25,6 +25,14 @@ export interface YuijuNapcatConfig {
 }
 
 /**
+ * message 进程暴露给内部调用方的 HTTP 服务配置。
+ */
+export interface YuijuMessageInternalApiConfig {
+  host: string;
+  port: number;
+}
+
+/**
  * 单个表情包配置。
  *
  * 说明：
@@ -50,6 +58,7 @@ export type YuijuStickerMap = Record<string, YuijuStickerConfig>;
  */
 export interface YuijuMessageConfig {
   napcat: NCWebsocketOptions;
+  internalApi: YuijuMessageInternalApiConfig;
   whiteList: number[];
   groupWhiteList: number[];
   stickers: YuijuStickerMap;

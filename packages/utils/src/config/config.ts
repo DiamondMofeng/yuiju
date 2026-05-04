@@ -1,6 +1,6 @@
-import rootConfig from "../../../../yuiju.config";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import rootConfig from "../../../../yuiju.config";
 import type { YuijuConfig } from "./config-schema";
 
 let cachedConfig: Readonly<YuijuConfig> | null = null;
@@ -72,6 +72,7 @@ export {
   type YuijuDatabaseConfig,
   type YuijuLlmConfig,
   type YuijuMessageConfig,
+  type YuijuMessageInternalApiConfig,
   type YuijuNapcatConfig,
   type YuijuNapcatReconnectionConfig,
   type YuijuStickerConfig,

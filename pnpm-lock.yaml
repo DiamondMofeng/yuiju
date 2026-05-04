@@ -17,6 +17,9 @@ importers:
       '@ai-sdk/openai-compatible':
         specifier: ^2.0.35
         version: 2.0.35(zod@4.1.13)
+      '@hono/node-server':
+        specifier: 1.19.11
+        version: 1.19.11(hono@4.12.14)
       '@types/mongoose':
         specifier: ^5.11.97
         version: 5.11.97(socks@2.8.7)
@@ -29,6 +32,9 @@ importers:
       dotenv:
         specifier: ^16.6.1
         version: 16.6.1
+      hono:
+        specifier: ^4.12.2
+        version: 4.12.14
       ioredis:
         specifier: ^5.8.2
         version: 5.8.2
@@ -137,9 +143,6 @@ importers:
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
-      hono:
-        specifier: ^4.12.2
-        version: 4.12.2
       lucide-react:
         specifier: ^0.577.0
         version: 0.577.0(react@19.2.4)
@@ -2577,10 +2580,6 @@ packages:
 
   hono@4.12.14:
     resolution: {integrity: sha512-am5zfg3yu6sqn5yjKBNqhnTX7Cv+m00ox+7jbaKkrLMRJ4rAdldd1xPd/JzbBWspqaQv6RSTrgFN95EsfhC+7w==}
-    engines: {node: '>=16.9.0'}
-
-  hono@4.12.2:
-    resolution: {integrity: sha512-gJnaDHXKDayjt8ue0n8Gs0A007yKXj4Xzb8+cNjZeYsSzzwKc0Lr+OZgYwVfB0pHfUs17EPoLvrOsEaJ9mj+Tg==}
     engines: {node: '>=16.9.0'}
 
   hookable@5.5.3:
@@ -5938,8 +5937,6 @@ snapshots:
       '@types/hast': 3.0.4
 
   hono@4.12.14: {}
-
-  hono@4.12.2: {}
 
   hookable@5.5.3: {}
 

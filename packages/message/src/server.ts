@@ -3,6 +3,7 @@ import { NCWebsocket } from "node-napcat-ts";
 import { groupMessageHandler } from "./handler/group-message";
 import { noticePokeHandler } from "./handler/notice-poke";
 import { privateMessageHandler } from "./handler/private-message";
+import { startMessageInternalApi } from "./internal-api";
 import { stickerState } from "./state/sticker";
 import { logger } from "./utils/logger";
 
@@ -27,6 +28,7 @@ async function main() {
   await stickerState.initialize();
   // 连接 napcat
   await napcat.connect();
+  startMessageInternalApi({ napcat });
   logger.info("[message.server] 消息服务启动完成");
 }
 

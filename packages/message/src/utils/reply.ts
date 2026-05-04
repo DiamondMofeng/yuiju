@@ -102,3 +102,50 @@ export async function sendAndRecordGroupReply(input: {
     }
   }
 }
+
+/**
+ * 发送并记录主动群消息。
+ */
+export async function sendAndRecordGroupProactiveMessage(input: {
+  napcat: NCWebsocket;
+  groupId: number;
+  message: string;
+  sessionLabel: string;
+}): Promise<{
+  sentMessageIds: number[];
+}> {
+  const replyLines = input.message.split("\n").filter((line) => line.trim().length > 0);
+  const sentMessageIds: number[] = [];
+
+  for (const [lineIndex, line] of replyLines.entries()) {
+    const messageSegments = stickerState.buildMessageSegmentsFromLine(line);
+    if (!messageSegments.length) {
+      continue;
+    }
+
+    const sendResult = await input.napcat.send_group_msg({
+      group_id: input.groupId,
+      message: messageSegments,
+    });
+
+    sentMessageIds.push(sendResult.message_id);
+
+    const sentMessage = await input.napcat.get_msg({
+      message_id: sendResult.message_id,
+    });
+
+    if (sentMessage.message_type !== "group") {
+      throw new Error(`Expected group message from get_msg, got ${sentMessage.message_type}`);
+    }
+
+    const storedSentMessage = await createStoredGroupMessageFromFetched(sentMessage, input.napcat);
+    llmManager.recordGroupMessage(storedSentMessage, input.sessionLabel);
+
+    const nextLine = replyLines[lineIndex + 1];
+    if (nextLine) {
+      await setTimeout(getReplyDelayMs(nextLine));
+    }
+  }
+
+  return { sentMessageIds };
+}
