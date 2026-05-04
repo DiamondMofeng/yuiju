@@ -36,23 +36,49 @@ export const shrineAction: ActionMetadata[] = [
 
       if (shouldOffer) {
         await context.characterState.changeMoney(-SHRINE_OFFERING_COST);
-        await context.characterState.changeMood(SHRINE_OFFERING_MOOD_GAIN);
 
         const wish = prayerDecision?.wish?.trim();
-        if (wish) {
-          return {
-            executionResult: `在结灯神社投了${SHRINE_OFFERING_COST}元香火钱，祈愿“${wish}”，心情提升了${SHRINE_OFFERING_MOOD_GAIN}点`,
-          };
-        }
-
         return {
-          executionResult: `在结灯神社投了${SHRINE_OFFERING_COST}元香火钱，认真祈愿，心情提升了${SHRINE_OFFERING_MOOD_GAIN}点`,
+          executionResult: wish
+            ? `在结灯神社投了${SHRINE_OFFERING_COST}元香火钱，祈愿“${wish}”`
+            : `在结灯神社投了${SHRINE_OFFERING_COST}元香火钱，认真祈愿`,
+          startContext: {
+            shouldOffer: true,
+            wish,
+            moodGain: SHRINE_OFFERING_MOOD_GAIN,
+          },
         };
       }
 
-      await context.characterState.changeMood(SHRINE_PRAY_MOOD_GAIN);
       return {
-        executionResult: `在结灯神社认真参拜，心情提升了${SHRINE_PRAY_MOOD_GAIN}点`,
+        executionResult: "在结灯神社认真参拜",
+        startContext: {
+          shouldOffer: false,
+          moodGain: SHRINE_PRAY_MOOD_GAIN,
+        },
+      };
+    },
+    async completionEvent(context, runningAction) {
+      const prayContext = runningAction.startContext as {
+        shouldOffer: boolean;
+        wish?: string;
+        moodGain: number;
+      };
+
+      await context.characterState.changeMood(prayContext.moodGain);
+
+      if (prayContext.shouldOffer) {
+        return {
+          completionContext: prayContext,
+          eventDescription: prayContext.wish
+            ? `在结灯神社祈愿“${prayContext.wish}”，心情提升了${prayContext.moodGain}点`
+            : `在结灯神社认真祈愿，心情提升了${prayContext.moodGain}点`,
+        };
+      }
+
+      return {
+        completionContext: prayContext,
+        eventDescription: `在结灯神社认真参拜，心情提升了${prayContext.moodGain}点`,
       };
     },
     durationMin: 10,

@@ -116,11 +116,11 @@ export const homeAction: ActionMetadata[] = [
       return false;
     },
     async executor(context) {
-      await context.characterState.setAction(ActionId.Sleep);
-      await context.characterState.changeMood(1);
+      await context.characterState.setAction(ActionId.Sleep_For_A_Little);
     },
-    async completionEvent() {
-      return { eventDescription: "闹钟响了" };
+    async completionEvent(context) {
+      await context.characterState.changeMood(1);
+      return { eventDescription: "闹钟响了，稍微多睡了一会儿" };
     },
     durationMin: 10,
   },
@@ -132,9 +132,12 @@ export const homeAction: ActionMetadata[] = [
     },
     async executor(context) {
       await context.characterState.setAction(ActionId.Eat_Breakfast);
+    },
+    async completionEvent(context) {
       await context.characterState.changeSatiety(40);
       await context.characterState.changeStamina(10);
       await context.characterState.markActionDoneToday(ActionId.Eat_Breakfast);
+      return { eventDescription: "吃完早餐，体力和饱腹恢复了" };
     },
     durationMin: 20,
   },
@@ -210,9 +213,12 @@ export const homeAction: ActionMetadata[] = [
     },
     async executor(context) {
       await context.characterState.setAction(ActionId.Eat_Dinner);
+    },
+    async completionEvent(context) {
       await context.characterState.changeSatiety(40);
       await context.characterState.changeStamina(10);
       await context.characterState.markActionDoneToday(ActionId.Eat_Dinner);
+      return { eventDescription: "吃完晚餐，体力和饱腹恢复了" };
     },
     durationMin: 20,
   },
@@ -402,8 +408,11 @@ export const homeAction: ActionMetadata[] = [
 
       return target.diff(now, "minute");
     },
-    async completionEvent() {
-      return { eventDescription: "闹钟响了" };
+    async completionEvent(context) {
+      await context.characterState.setStamina(85);
+      await context.characterState.setSatiety(20);
+      await context.characterState.changeMood(2);
+      return { eventDescription: "闹钟响了，睡醒了" };
     },
   },
 ];

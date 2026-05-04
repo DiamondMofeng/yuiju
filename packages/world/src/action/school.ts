@@ -18,9 +18,12 @@ export const schoolAction: ActionMetadata[] = [
     },
     async executor(context) {
       await context.characterState.setAction(ActionId.Study_At_School);
+    },
+    async completionEvent(context) {
       await context.characterState.changeStamina(-12);
       await context.characterState.changeSatiety(-12);
       await context.characterState.changeMood(-5);
+      return { eventDescription: "上课结束了" };
     },
     durationMin: async (context) => {
       const now = context.worldState.time.clone();

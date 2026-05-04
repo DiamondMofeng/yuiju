@@ -51,9 +51,12 @@ export const anywhereAction: ActionMetadata[] = [
     },
     async executor(context) {
       await context.characterState.setAction(ActionId.Eat_Lunch);
+    },
+    async completionEvent(context) {
       await context.characterState.changeStamina(50);
       await context.characterState.changeSatiety(50);
       await context.characterState.markActionDoneToday(ActionId.Eat_Lunch);
+      return { eventDescription: "吃完午饭，体力和饱腹恢复了" };
     },
     durationMin: 20,
   },
@@ -98,7 +101,13 @@ export const anywhereAction: ActionMetadata[] = [
         return { executionResult: "没有选择要吃的食物。" };
       }
 
-      const eatenSummary: string[] = [];
+      const eatenFood: Array<{
+        name: string;
+        quantity: number;
+        stamina: number;
+        satiety: number;
+        mood: number;
+      }> = [];
 
       // 遍历处理所有选择的食物
       for (const selectedFood of selectedFoodList) {
@@ -113,37 +122,70 @@ export const anywhereAction: ActionMetadata[] = [
 
         // 统一通过 metadata 解析收益，避免购买时配置的 mood/satiety 在消费时丢失。
         const { stamina, satiety, mood } = resolveFoodRecoveryPerUnit(selectedFood.extra);
-        const staminaPerUnit = stamina;
-        const totalStamina = staminaPerUnit * quantity;
-        if (totalStamina !== 0) {
-          await context.characterState.changeStamina(totalStamina);
-        }
-
-        const satietyPerUnit = satiety;
-        const totalSatiety = satietyPerUnit * quantity;
-        if (totalSatiety !== 0) {
-          await context.characterState.changeSatiety(totalSatiety);
-        }
-
+        const totalStamina = stamina * quantity;
+        const totalSatiety = satiety * quantity;
         const totalMood = mood * quantity;
-        if (totalMood !== 0) {
-          await context.characterState.changeMood(totalMood);
-        }
 
         logger.info(
-          `[Eat_Item] 成功消费 ${selectedFood.value} x${quantity}，恢复 ${totalStamina} 点体力，恢复 ${totalSatiety} 点饱腹，恢复 ${totalMood} 点心情`,
+          `[Eat_Item] 成功消费 ${selectedFood.value} x${quantity}，等待完成后恢复 ${totalStamina} 点体力，${totalSatiety} 点饱腹，${totalMood} 点心情`,
         );
 
-        eatenSummary.push(`${selectedFood.value}${quantity}个`);
+        eatenFood.push({
+          name: selectedFood.value,
+          quantity,
+          stamina: totalStamina,
+          satiety: totalSatiety,
+          mood: totalMood,
+        });
       }
 
-      if (eatenSummary.length === 0) {
+      if (eatenFood.length === 0) {
         return { executionResult: "尝试吃东西，但都没吃成功。" };
       }
 
-      return { executionResult: `吃了${eatenSummary.join("，")}` };
+      return {
+        executionResult: `开始吃${eatenFood.map((food) => `${food.name}${food.quantity}个`).join("，")}`,
+        startContext: {
+          eatenFood,
+        },
+      };
     },
+    async completionEvent(context, runningAction) {
+      const eatContext = runningAction.startContext as {
+        eatenFood: Array<{
+          name: string;
+          quantity: number;
+          stamina: number;
+          satiety: number;
+          mood: number;
+        }>;
+      };
 
+      let totalStamina = 0;
+      let totalSatiety = 0;
+      let totalMood = 0;
+
+      for (const food of eatContext.eatenFood) {
+        totalStamina += food.stamina;
+        totalSatiety += food.satiety;
+        totalMood += food.mood;
+      }
+
+      if (totalStamina !== 0) {
+        await context.characterState.changeStamina(totalStamina);
+      }
+      if (totalSatiety !== 0) {
+        await context.characterState.changeSatiety(totalSatiety);
+      }
+      if (totalMood !== 0) {
+        await context.characterState.changeMood(totalMood);
+      }
+
+      return {
+        completionContext: eatContext,
+        eventDescription: `吃完了${eatContext.eatenFood.map((food) => `${food.name}${food.quantity}个`).join("，")}`,
+      };
+    },
     durationMin: 10,
   },
 ];

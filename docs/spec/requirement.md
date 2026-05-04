@@ -75,6 +75,78 @@
 - 场景状态系统。
 - 大范围重构现有 Action。
 
+## 移动生命周期能力
+
+### 背景
+
+当前移动类 Action 更像普通等待型 Action：开始执行时立即把角色位置更新到目的地，然后等待一段时间。这会导致角色在移动过程中看起来已经到达目的地，无法表达“正在从 A 前往 B”的状态。
+
+移动能力不只是某几个 Action 的局部重构，而是 world engine 需要补充的一种生命周期能力。它需要表达出发地、目的地、移动中状态、到达结算，以及对状态查询和页面展示的影响。
+
+### 目标
+
+为 world engine 增加移动生命周期能力，让移动 Action 可以清晰表达“开始移动、移动中、到达完成”的过程。
+
+核心目标：
+
+- 移动开始时记录出发地和目的地。
+- 移动过程中不提前把 `location` 更新为目的地。
+- Redis 的 `runningAction` 保存移动中上下文，用于恢复等待状态和展示移动中状态。
+- 移动完成时再更新角色 `location`。
+- 移动完成时结算体力、饱腹等移动消耗。
+- MongoDB behavior Episode 能体现移动从 `running` 到 `completed`。
+- 状态查询和页面展示可以表达“正在从 A 前往 B”。
+
+### 典型流程
+
+以“从家去学校”为例：
+
+```text
+开始移动
+  -> 读取当前位置作为 from
+  -> 读取目标位置作为 to
+  -> 写入 runningAction：移动中，from 家，to 学校
+  -> 在 MongoDB 写入一条 running behavior Episode
+  -> 等待移动耗时
+  -> 移动完成
+  -> 执行 completionEvent
+  -> 更新 location 为学校
+  -> 结算体力、饱腹等移动消耗
+  -> 更新 MongoDB behavior Episode 为 completed
+  -> 清理 Redis runningAction
+  -> 产生 eventDescription
+  -> 进入下一次 tick
+```
+
+### 状态边界
+
+- Redis 是角色实时状态的真相源，移动中状态由 `runningAction` 表达。
+- `location` 只表示角色当前已经处于的位置，不表示移动目的地。
+- 移动完成前，不应把 `location` 提前更新为目的地。
+- MongoDB behavior Episode 用于记录移动事实，不作为实时位置真相源。
+- 页面或状态查询需要展示移动中状态时，应从 `location` 和 `runningAction` 派生展示，不新增第二份位置真相源。
+
+### 第一版范围
+
+第一版只处理现有移动类 Action：
+
+- 移动开始时记录 `from` 和 `to`。
+- 移动中保留原 `location`。
+- 移动完成时更新 `location`。
+- 移动完成时结算移动消耗。
+- 移动完成后返回可作为下一次 tick 上下文的 `eventDescription`。
+
+### 暂不处理范围
+
+第一版暂不处理：
+
+- 移动中断、取消或改道。
+- 移动中随机事件。
+- 多段路线和路线选择。
+- 交通方式系统。
+- 多角色并行移动。
+- 场景状态系统。
+
 ## Action 中断能力
 
 ### 背景

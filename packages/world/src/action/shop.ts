@@ -94,26 +94,58 @@ export const shopAction: ActionMetadata[] = [
       await context.characterState.changeMoney(-cost);
       remainingMoney -= cost;
 
-      await context.characterState.addItem(
-        {
-          name: product.name,
-          description: product.description,
-          category: "food",
-          metadata: buildFoodMetadata({
-            stamina: product.stamina,
-            satiety: product.satiety,
-            mood: product.mood,
-            fallbackSatiety: Math.round(product.price / 5),
-          }),
-        },
-        quantity,
-      );
-
       logger.info(
         `[Buy_Item_At_Shop] 购买成功: ${product.name} x${quantity}，花费${cost}元，剩余${remainingMoney}元`,
       );
 
-      return { executionResult: `买了${product.name}${quantity}个，花费${cost}元` };
+      return {
+        executionResult: `买了${product.name}${quantity}个，花费${cost}元，等待取货`,
+        startContext: {
+          productName: product.name,
+          description: product.description,
+          quantity,
+          stamina: product.stamina,
+          satiety: product.satiety,
+          mood: product.mood,
+          fallbackSatiety: Math.round(product.price / 5),
+        },
+      };
+    },
+    async completionEvent(context, runningAction) {
+      const purchaseContext = runningAction.startContext as {
+        productName: string;
+        description: string;
+        quantity: number;
+        stamina?: number;
+        satiety?: number;
+        mood?: number;
+        fallbackSatiety: number;
+      };
+
+      await context.characterState.addItem(
+        {
+          name: purchaseContext.productName,
+          description: purchaseContext.description,
+          category: "food",
+          metadata: buildFoodMetadata({
+            stamina: purchaseContext.stamina,
+            satiety: purchaseContext.satiety,
+            mood: purchaseContext.mood,
+            fallbackSatiety: purchaseContext.fallbackSatiety,
+          }),
+        },
+        purchaseContext.quantity,
+      );
+
+      return {
+        completionContext: {
+          purchasedItem: {
+            name: purchaseContext.productName,
+            quantity: purchaseContext.quantity,
+          },
+        },
+        eventDescription: `拿到了${purchaseContext.productName}${purchaseContext.quantity}个`,
+      };
     },
     durationMin: 10,
   },

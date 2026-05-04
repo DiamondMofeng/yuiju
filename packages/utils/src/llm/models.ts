@@ -39,13 +39,16 @@ export const strongModel = wrapLanguageModel({
 });
 
 /**
- * 当前用于日记生成等偏写作型任务的模型。
+ * 需要快速响应、轻文本类工作
  */
 export const flashModel = wrapLanguageModel({
   model: siliconflow("MiniMaxAI/MiniMax-M2.5"),
   middleware: [],
 });
 
+/**
+ * 主要用于图片描述（识图场景）
+ */
 export const qwen3Model = wrapLanguageModel({
   model: siliconflow("Qwen/Qwen3.5-397B-A17B"),
   middleware: [],

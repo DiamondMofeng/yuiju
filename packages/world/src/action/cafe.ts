@@ -111,28 +111,53 @@ export const cafeAction: ActionMetadata[] = [
 
       await context.characterState.changeMoney(-cost);
 
+      logger.info(`[Order_Coffee] 点单成功: ${coffee.name}，花费${cost}元`);
+
+      return {
+        executionResult: `点了${coffee.name}，花费${cost}元`,
+        startContext: {
+          coffeeName: coffee.name,
+          description: coffee.description,
+          stamina: coffee.stamina,
+          satiety: coffee.satiety,
+          mood: coffee.mood,
+        },
+      };
+    },
+    durationMin: 10,
+    async completionEvent(context, runningAction) {
+      const coffeeContext = runningAction.startContext as {
+        coffeeName: CafeCoffeeName;
+        description: string;
+        stamina?: number;
+        satiety?: number;
+        mood?: number;
+      };
+
       await context.characterState.addItem(
         {
-          name: coffee.name,
-          description: coffee.description,
+          name: coffeeContext.coffeeName,
+          description: coffeeContext.description,
           category: "food",
           metadata: buildFoodMetadata({
-            stamina: coffee.stamina,
-            satiety: coffee.satiety,
-            mood: coffee.mood,
+            stamina: coffeeContext.stamina,
+            satiety: coffeeContext.satiety,
+            mood: coffeeContext.mood,
             fallbackSatiety: 2,
           }),
         },
         1,
       );
 
-      logger.info(`[Order_Coffee] 点单成功: ${coffee.name}，花费${cost}元`);
-
-      return { executionResult: `点了${coffee.name}，花费${cost}元` };
-    },
-    durationMin: 10,
-    async completionEvent() {
-      return { eventDescription: "咖啡制作完成" };
+      return {
+        completionContext: {
+          producedItem: {
+            name: coffeeContext.coffeeName,
+            quantity: 1,
+          },
+        },
+        eventDescription: `${coffeeContext.coffeeName}制作完成`,
+      };
     },
   },
   {
@@ -156,21 +181,43 @@ export const cafeAction: ActionMetadata[] = [
       }
 
       const coffee = CAFE_COFFEES.find((item) => item.name === coffeeName);
+
+      return {
+        executionResult: `开始喝${coffeeName}`,
+        startContext: {
+          coffeeName,
+          stamina: coffee?.stamina ?? 0,
+          satiety: coffee?.satiety ?? 0,
+          mood: coffee?.mood ?? 0,
+        },
+      };
+    },
+    async completionEvent(context, runningAction) {
+      const drinkContext = runningAction.startContext as {
+        coffeeName: CafeCoffeeName;
+        stamina: number;
+        satiety: number;
+        mood: number;
+      };
+
       const result: string[] = [];
-      if (coffee?.stamina) {
-        await context.characterState.changeStamina(coffee?.stamina);
-        result.push(`[体力+${coffee?.stamina}]`);
+      if (drinkContext.stamina !== 0) {
+        await context.characterState.changeStamina(drinkContext.stamina);
+        result.push(`[体力+${drinkContext.stamina}]`);
       }
-      if (coffee?.satiety) {
-        await context.characterState.changeSatiety(coffee?.satiety);
-        result.push(`[饱腹+${coffee?.satiety}]`);
+      if (drinkContext.satiety !== 0) {
+        await context.characterState.changeSatiety(drinkContext.satiety);
+        result.push(`[饱腹+${drinkContext.satiety}]`);
       }
-      if (coffee?.mood) {
-        await context.characterState.changeMood(coffee?.mood);
-        result.push(`[心情+${coffee?.mood}]`);
+      if (drinkContext.mood !== 0) {
+        await context.characterState.changeMood(drinkContext.mood);
+        result.push(`[心情+${drinkContext.mood}]`);
       }
 
-      return { executionResult: `喝了${coffeeName}${result.join(",")}` };
+      return {
+        completionContext: drinkContext,
+        eventDescription: `喝完了${drinkContext.coffeeName}${result.join(",")}`,
+      };
     },
     durationMin: 30,
   },
@@ -185,11 +232,13 @@ export const cafeAction: ActionMetadata[] = [
     },
     async executor(context) {
       await context.characterState.setAction(ActionId.Work_At_Cafe);
+    },
+    async completionEvent(context) {
       await context.characterState.changeMoney(200);
       await context.characterState.changeStamina(-10);
       await context.characterState.changeSatiety(-10);
       await context.characterState.changeMood(-5);
-      return { executionResult: "打工1小时，赚了200元" };
+      return { eventDescription: "在薄暮咖啡馆打工1小时，赚了200元" };
     },
     durationMin: 60,
   },
