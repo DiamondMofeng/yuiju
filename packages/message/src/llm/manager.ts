@@ -30,6 +30,7 @@ import {
   type AbstractChatSessionManager,
   GroupChatSessionManager,
   PrivateChatSessionManager,
+  type SessionHistoryContext,
 } from "./chat-session-manager";
 
 type ActiveGroupChatTask = {
@@ -118,6 +119,16 @@ export class LLMManager {
       sessionLabel: sessionLabel ?? getProtocolMessageSenderName(message),
       message,
     });
+  }
+
+  /**
+   * 读取群聊当前会话上下文，供 message 外部能力复用同一份历史投影。
+   */
+  public async getGroupConversationContext(input: {
+    groupId: number;
+    limit?: number;
+  }): Promise<SessionHistoryContext> {
+    return this.groupSession.getHistoryJson(this.buildGroupSessionKey(input.groupId), input.limit);
   }
 
   private buildPrivateSessionKey(userId: number): string {
