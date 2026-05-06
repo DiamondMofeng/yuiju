@@ -3,6 +3,8 @@
 - Action 模块能力拓展
 - 调研一下 b 站直播的接入
   - [blive-message-listener](https://github.com/ddiu8081/blive-message-listener)
+- 最新的消息测回时，应该取消当前的 LLM 调用，重新执行
+- @ 与回复消息时走快速回复，其余情况可以走深度思考，增加回复质量
 
 ## 想法
 
