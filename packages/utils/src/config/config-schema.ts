@@ -59,6 +59,9 @@ export type YuijuStickerMap = Record<string, YuijuStickerConfig>;
 export interface YuijuMessageConfig {
   napcat: NCWebsocketOptions;
   internalApi: YuijuMessageInternalApiConfig;
+  proactive: {
+    groupTargetId: number;
+  };
   whiteList: number[];
   groupWhiteList: number[];
   stickers: YuijuStickerMap;

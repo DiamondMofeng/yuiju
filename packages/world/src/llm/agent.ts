@@ -108,6 +108,13 @@ export async function chooseActionAgent(
               .min(1)
               .optional()
               .describe("只有确实需要调整计划时才输出。输出前必须先调用 reviewPlanChanges。"),
+            proactiveShareIntent: z
+              .object({
+                shouldShare: z.boolean().describe("你是否主观上想分享这次生活事件"),
+                reason: z.string().describe("想分享或不想分享的简短理由"),
+              })
+              .optional()
+              .describe("当你主观上想分享这次生活事件时输出。"),
           }),
         }),
         prompt: systemPrompt,

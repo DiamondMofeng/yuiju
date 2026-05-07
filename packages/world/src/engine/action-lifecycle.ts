@@ -26,6 +26,7 @@ import {
 import { characterState } from "@/state/character-state";
 import { worldState } from "@/state/world-state";
 import { logger } from "@/utils/logger";
+import { scheduleActionCompletionProactiveShare } from "./proactive-message";
 
 async function getDurationTime(
   durationMin:
@@ -50,6 +51,7 @@ interface ActionStartTickResult {
     durationMinutes: number;
     executionResult?: string;
     startContext?: Record<string, unknown>;
+    proactiveShareIntent?: ActionAgentDecision["proactiveShareIntent"];
   };
 }
 
@@ -82,8 +84,6 @@ async function startAction(eventDescription?: string): Promise<ActionStartTickRe
 
   logger.info(
     `[action-lifecycle] Available actions: [${actionList.map((a) => a.action).join(", ")}]`,
-    context.characterState.log(),
-    context.worldState.log(),
   );
 
   const recentBehaviors = await getRecentMemoryEpisodes({
@@ -154,6 +154,7 @@ async function startAction(eventDescription?: string): Promise<ActionStartTickRe
         durationMinutes: durationMin,
         executionResult: actionStartResult?.executionResult,
         startContext: actionStartResult?.startContext,
+        proactiveShareIntent: selectedAction.proactiveShareIntent,
       },
     };
   } else {
@@ -216,6 +217,15 @@ export async function recoverRunningAction(): Promise<string | undefined> {
     throw new Error(`Update behavior episode failed: ${runningAction.behaviorEpisodeId}`);
   }
 
+  scheduleActionCompletionProactiveShare({
+    actionMetadata,
+    runningAction,
+    eventDescription: completionResult?.eventDescription,
+    completionContext: completionResult?.completionContext,
+    characterStateSnapshot: context.characterState.log(),
+    worldStateSnapshot: context.worldState.log(),
+  });
+
   await characterState.clearRunningAction();
   return completionResult?.eventDescription;
 }
@@ -274,6 +284,7 @@ export async function runNextAction(eventDescription?: string): Promise<string |
     waitUntil,
     behaviorEpisodeId,
     startContext: actionStartResult.runningAction.startContext,
+    proactiveShareIntent: actionStartResult.runningAction.proactiveShareIntent,
   });
 
   return recoverRunningAction();

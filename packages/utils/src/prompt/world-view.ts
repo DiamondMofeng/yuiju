@@ -178,6 +178,7 @@ export function chooseActionPrompt({
 - 当你需要回忆今天的事件时，优先调用 \`todayEventSearch\`；当你需要回顾过去的日记时，优先调用 \`diarySearch\`；不要只依赖下面给出的最近 action 快捷上下文。
 - 下面的“最近的action”只是一段快捷上下文，不代表完整记忆；涉及更早历史、日记回顾或事实偏好时请主动查询。
 - 当你需要判断地点关系、移动方向、移动耗时、相邻地点或整体地图结构时，优先调用 \`queryWorldMap\` 获取世界地图，而不是依赖记忆猜测。
+- 当你主观上想把这次生活事件分享给群聊时输出 \`proactiveShareIntent\`，并用一句话说明你想分享的理由；普通移动、发呆、短暂停留等低信息量 Action 不要输出。
 
 ${planUpdateGuidelinePrompt}
 
