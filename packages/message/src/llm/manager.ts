@@ -1,8 +1,8 @@
 import {
+  buildChatPlanProposalPrompt,
   buildMessageHistoryUserPrompt,
-  buildPrivatePlanProposalPrompt,
   chatReplyRulesPrompt,
-  createPrivatePlanChangesProposalTool,
+  createChatPlanChangesProposalTool,
   createToolCallLoggingHooks,
   diarySearchTool,
   flashModel,
@@ -11,7 +11,6 @@ import {
   getPersonMemoryTool,
   listPersonMemoriesTool,
   messageHistorySchemaPrompt,
-  planManager,
   queryStateTool,
   queryWorldMapTool,
   todayEventSearchTool,
@@ -174,6 +173,7 @@ export class LLMManager {
       stickerState.getPromptSection(),
       messageHistorySchemaPrompt,
       chatReplyRulesPrompt,
+      buildChatPlanProposalPrompt(),
       "## 当前聊天场景",
       `你现在正在 QQ 群「${getGroupDisplayName(message)}」`,
     ].join("\n\n");
@@ -204,6 +204,11 @@ export class LLMManager {
           getPersonMemory: getPersonMemoryTool,
           queryStateTool: queryStateTool,
           queryWorldMap: queryWorldMapTool,
+          proposePlanChanges: createChatPlanChangesProposalTool({
+            scene: "group",
+            summary,
+            historyJson,
+          }),
         },
         stopWhen: stepCountIs(20),
         abortSignal: controller.signal,
@@ -258,13 +263,12 @@ export class LLMManager {
     const sessionId = this.buildPrivateSessionKey(message.user_id);
     const { historyJson, summary } = await this.privateSession.getHistoryJson(sessionId);
     const sessionLabel = getProtocolMessageSenderName(message);
-    const planState = await planManager.getState();
     const systemPrompt = [
       getCharacterCardPrompt(),
       stickerState.getPromptSection(),
       messageHistorySchemaPrompt,
       chatReplyRulesPrompt,
-      buildPrivatePlanProposalPrompt(planState),
+      buildChatPlanProposalPrompt(),
     ].join("\n\n");
 
     const result = await generateStructuredOutput({
@@ -291,8 +295,8 @@ export class LLMManager {
         getPersonMemory: getPersonMemoryTool,
         queryStateTool: queryStateTool,
         queryWorldMap: queryWorldMapTool,
-        proposePlanChanges: createPrivatePlanChangesProposalTool({
-          sessionLabel,
+        proposePlanChanges: createChatPlanChangesProposalTool({
+          scene: "private",
           summary,
           historyJson,
         }),

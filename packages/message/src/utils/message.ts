@@ -499,7 +499,7 @@ async function generateImageDescription(segment: ImageMessageSegment): Promise<s
             {
               type: "text",
               text: [
-                "请描述这张图片里最重要的可见内容，控制在 200 字以内。",
+                "请描述这张图片里最重要的可见内容，控制在 100 字以内。",
                 `这个图片的 summary: ${summaryText}。`,
                 "这个字段有语义，不是无意义元数据。",
                 "如果 summary 是 [动画表情]，说明这更像 QQ 动画表情或表情包消息；如果 summary 为空，通常是普通图片。",

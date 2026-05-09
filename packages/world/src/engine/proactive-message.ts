@@ -1,3 +1,10 @@
+/**
+ * 动作完成后的主动群聊分享模块。
+ *
+ * 负责在行为明确产生分享意图时，读取群聊上下文和贴纸提示词，
+ * 交给 LLM 判断当前是否适合主动发送生活分享，并在决策通过后发送到配置的目标群。
+ */
+
 import {
   type ActionMetadata,
   buildProactiveGroupMessagePrompt,
@@ -14,6 +21,7 @@ import {
 } from "@yuiju/utils";
 import { Output } from "ai";
 import { z } from "zod";
+import { internalMessageApi } from "@/api/internal-message-api";
 import { logger } from "@/utils/logger";
 
 interface ScheduleActionCompletionProactiveShareInput {
@@ -23,21 +31,6 @@ interface ScheduleActionCompletionProactiveShareInput {
   completionContext?: Record<string, unknown>;
   characterStateSnapshot: CharacterStateData;
   worldStateSnapshot: WorldStateData;
-}
-
-interface InternalStickerContext {
-  promptSection: string;
-  stickers: {
-    key: string;
-    description: string;
-  }[];
-}
-
-interface InternalGroupConversationContext {
-  groupId: number;
-  groupLabel: string;
-  summary?: string;
-  historyJson: string;
 }
 
 interface ProactiveGroupMessageDecision {
@@ -72,14 +65,9 @@ async function shareActionCompletionToGroup(
   },
 ) {
   const config = getYuijuConfig();
-  const internalApiBaseUrl = `http://${config.message.internalApi.host}:${config.message.internalApi.port}`;
   const groupId = config.message.proactive.groupTargetId;
-  const stickersResponse = await fetch(`${internalApiBaseUrl}/internal/stickers`);
-  const stickers = (await stickersResponse.json()) as InternalStickerContext;
-  const groupContextResponse = await fetch(
-    `${internalApiBaseUrl}/internal/groups/${groupId}/context?limit=6`,
-  );
-  const groupContext = (await groupContextResponse.json()) as InternalGroupConversationContext;
+  const stickers = await internalMessageApi.getStickers();
+  const groupContext = await internalMessageApi.getGroupContext(groupId, 6);
 
   const result = await generateStructuredOutput({
     model: flashModel,
@@ -132,14 +120,5 @@ async function shareActionCompletionToGroup(
     return;
   }
 
-  const sendResponse = await fetch(`${internalApiBaseUrl}/internal/groups/${groupId}/messages`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      message: decision.message,
-    }),
-  });
-  await sendResponse.json();
+  await internalMessageApi.sendGroupMessage(groupId, decision.message);
 }

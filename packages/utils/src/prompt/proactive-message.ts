@@ -1,3 +1,4 @@
+import { formatProjectTime } from "../time";
 import type { ActionId, CharacterStateData, WorldStateData } from "../types";
 
 export interface BuildProactiveGroupMessagePromptInput {
@@ -17,6 +18,11 @@ export interface BuildProactiveGroupMessagePromptInput {
 export function buildProactiveGroupMessagePrompt(
   input: BuildProactiveGroupMessagePromptInput,
 ): string {
+  const worldStateSnapshot = {
+    ...input.worldStateSnapshot,
+    time: formatProjectTime(input.worldStateSnapshot.time, "YYYY-MM-DD HH:mm:ss"),
+  };
+
   return `
 ## 主动分享任务
 
@@ -44,7 +50,7 @@ ${JSON.stringify(input.characterStateSnapshot, null, 2)}
 ## 当前世界状态
 
 \`\`\`json
-${JSON.stringify(input.worldStateSnapshot, null, 2)}
+${JSON.stringify(worldStateSnapshot, null, 2)}
 \`\`\`
 
 ## 目标群聊
@@ -61,11 +67,8 @@ ${input.groupContext.historyJson}
 
 ## 判断要求
 
-- 只判断当前群聊上下文是否适合插入这条生活分享，不要重新判断你是否想分享。
+- 以“当前世界状态”中的时间作为当前时间，读取“最近群聊消息”中时间最新的一条消息。
+- 如果最近群聊消息为空，或最新消息距离当前时间已经超过 10 分钟，说明群聊当前已经安静；只要这件生活事件本身适合自然分享，就可以 shouldSend=true。
 - 如果群聊正在聊完全无关且插入会突兀，shouldSend=false。
-- 如果群聊安静，且这件生活事件本身适合自然分享，可以 shouldSend=true。
-- 消息要像你自然分享生活，不要像系统通知。
-- 不要提到 Action、completionEvent、触发记录、内部接口等实现概念。
-- shouldSend=false 时 message 输出空字符串。
 `.trim();
 }

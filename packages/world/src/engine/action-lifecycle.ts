@@ -142,7 +142,8 @@ async function startAction(eventDescription?: string): Promise<ActionStartTickRe
     const durationMin = await getDurationTime(actionMetadata.durationMin, context, selectedAction);
 
     logger.info(
-      `[action-lifecycle] Executed action: ${selectedAction.action}, Reason: ${selectedAction.reason}， Duration: ${durationMin} minutes`,
+      `[action-lifecycle startAction] Duration ${durationMin} min, selectedAction: `,
+      selectedAction,
     );
 
     return {

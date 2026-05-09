@@ -1,5 +1,4 @@
 import { NICKNAME, SUBJECT_NAME } from "../constants";
-import type { PlanState } from "../types";
 
 export interface MessageHistoryUserPromptInput {
   summary?: string;
@@ -11,20 +10,6 @@ export interface MessageSummaryPromptInput {
   sessionLabel: string;
   previousSummary?: string;
   transcript: string;
-}
-
-function formatPlanStateForMessagePrompt(planState: PlanState): string {
-  const longTermPlan = planState.longTermPlan?.title ?? "（无）";
-  const shortTermPlans =
-    planState.shortTermPlans.length > 0
-      ? planState.shortTermPlans.map((plan, index) => `${index + 1}. ${plan.title}`).join("\n")
-      : "（无）";
-
-  return `
-长期计划：${longTermPlan}
-短期计划：
-${shortTermPlans}
-`;
 }
 
 export const messageHistorySchemaPrompt = `
@@ -89,19 +74,17 @@ ${input.historyJson}
 }
 
 /**
- * 构建私聊场景的计划提案提示词。
+ * 构建聊天场景的计划提案提示词。
  *
  * 说明：
- * - 私聊模型只能提交计划变更提案，不能确认计划已经生效；
+ * - 聊天模型只能提交计划变更提案，不能确认计划已经生效；
  * - 真正的审查、应用和记忆写入由后台链路处理。
  */
-export function buildPrivatePlanProposalPrompt(planState: PlanState): string {
+export function buildChatPlanProposalPrompt(): string {
   return `
-## 当前计划状态
-${formatPlanStateForMessagePrompt(planState)}
-
-## 私聊计划提案规则
-只有当聊天内容明确影响悠酱后续安排时，才调用 \`proposePlanChanges\` 提交计划变更提案。
+## 聊天计划提案规则
+只有当聊天内容明确影响你后续安排时，才调用 \`proposePlanChanges\` 提交计划变更提案。
+当你需要判断当前计划，或准备提交计划变更提案时，必须先调用 \`queryStateTool\` 查看当前计划状态；不要凭聊天上下文猜当前计划。
 普通聊天、情绪回应、临时问答、寒暄和随口闲聊，不要调用 \`proposePlanChanges\`。
 \`proposePlanChanges\` 只表示提案已提交后台审查，不代表计划已经更新成功。
 调用工具后，不要对用户说“计划已更新”“已加入计划”“已经安排好”等确认生效的话。
