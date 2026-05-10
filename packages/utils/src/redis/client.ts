@@ -4,6 +4,8 @@ import { getYuijuConfig } from "../config";
 let redis: Redis | null = null;
 let syncRedis: Redis | null = null;
 
+export type RedisReadSource = "primary" | "sync";
+
 export type RedisHashFields = Record<string, string | number | Buffer>;
 
 export type SyncRedisStateWrite =
@@ -18,18 +20,22 @@ export type SyncRedisStateWrite =
       value: string;
     };
 
-export const getRedis = () => {
-  if (!redis) {
-    const redisUrl = getYuijuConfig().database.redisUrl.trim();
-    redis = new Redis(redisUrl);
-  }
-  return redis;
+export const hasSyncRedisUrl = (): boolean => {
+  return Boolean(getYuijuConfig().database.syncRedisUrl?.trim());
 };
 
-const getSyncRedis = () => {
+export const getRedis = (source: RedisReadSource = "primary") => {
+  if (source === "primary") {
+    if (!redis) {
+      const redisUrl = getYuijuConfig().database.redisUrl.trim();
+      redis = new Redis(redisUrl);
+    }
+    return redis;
+  }
+
   const syncRedisUrl = getYuijuConfig().database.syncRedisUrl?.trim();
   if (!syncRedisUrl) {
-    return null;
+    throw new Error("database.syncRedisUrl is not configured, cannot read from sync Redis");
   }
 
   if (!syncRedis) {
@@ -51,11 +57,12 @@ export const closeRedis = async () => {
 };
 
 export const syncRedisStateWrite = async (write: SyncRedisStateWrite): Promise<void> => {
+  if (!hasSyncRedisUrl()) {
+    return;
+  }
+
   try {
-    const redis = getSyncRedis();
-    if (!redis) {
-      return;
-    }
+    const redis = getRedis("sync");
 
     if (write.command === "hset") {
       await redis.hset(write.key, write.fields);

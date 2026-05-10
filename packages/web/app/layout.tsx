@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Navbar } from "@/lib/components/navbar";
 import { Toaster } from "@/components/ui/sonner";
+import { Navbar } from "@/lib/components/navbar";
 import { isPublicDeployment } from "@/lib/public-deployment";
 
 export const metadata: Metadata = {
@@ -20,11 +20,7 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body className="antialiased">
-        <Navbar
-          showActivity={showInternalPages}
-          showDiary={showInternalPages}
-          showLogs={showInternalPages}
-        />
+        <Navbar showLogs={showInternalPages} />
         <div>{children}</div>
         <Toaster />
       </body>

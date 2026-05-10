@@ -1,3 +1,4 @@
+import { getYuijuConfig, type MongoReadSource } from "@yuiju/utils";
 import { Hono } from "hono";
 import {
   normalizeActivityPage,
@@ -20,18 +21,11 @@ const parsePageSize = (value: string | undefined) => {
   return normalizeActivityPageSize(parsed);
 };
 
-activityRoute.use("*", async (context, next) => {
-  const blocked = rejectPublicRequest(context);
-  if (blocked) {
-    return blocked;
-  }
-  await next();
-});
-
 activityRoute.get("/activity", async (context) => {
   const page = parsePage(context.req.query("page"));
   const pageSize = parsePageSize(context.req.query("pageSize"));
-  const { events, pagination } = await queryActivityEvents({ page, pageSize });
+  const readFrom: MongoReadSource = getYuijuConfig().app.publicDeployment ? "sync" : "primary";
+  const { events, pagination } = await queryActivityEvents({ page, pageSize, readFrom });
 
   return context.json({
     code: 0,

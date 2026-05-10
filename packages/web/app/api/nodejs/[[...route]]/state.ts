@@ -19,6 +19,14 @@ const parseAmount = (value: unknown): number | null => {
 
 export const stateRoute = new Hono();
 
+stateRoute.use("*", async (context, next) => {
+  const blocked = rejectPublicRequest(context);
+  if (blocked) {
+    return blocked;
+  }
+  await next();
+});
+
 stateRoute.post("/allowance", async (context) => {
   const blocked = rejectPublicRequest(context);
   if (blocked) {

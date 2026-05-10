@@ -1,10 +1,10 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
-import type { ActivityResponsePayload } from "./activity-data";
 import { ActivityCareCard } from "./activity-care-card";
+import type { ActivityResponsePayload } from "./activity-data";
 import { ActivityDetailPreviewCard } from "./activity-detail-preview-card";
 import { ActivityTimelineCard } from "./activity-timeline-card";
 
@@ -31,6 +31,10 @@ const parseCurrentPage = (value: string | null) => {
   return parsed;
 };
 
+type ActivityClientShellProps = {
+  showCareCard: boolean;
+};
+
 /**
  * 动态页客户端壳组件。
  *
@@ -38,7 +42,7 @@ const parseCurrentPage = (value: string | null) => {
  * - 查询页码统一写入 URL，便于刷新、分享和前进后退；
  * - 页面数据完全依赖 nodejs API，避免客户端直接接触数据库模型。
  */
-export function ActivityClientShell() {
+export function ActivityClientShell({ showCareCard }: ActivityClientShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -80,22 +84,20 @@ export function ActivityClientShell() {
   };
 
   return (
-    <>
-      <div className="grid grid-cols-[1fr_360px] max-[1020px]:grid-cols-1 gap-[14px] items-start mt-4.5">
-        <ActivityTimelineCard
-          events={events}
-          isLoading={isBusy}
-          errorMessage={error instanceof Error ? error.message : undefined}
-          pagination={pagination}
-          selectedId={selectedEvent?.id ?? null}
-          onSelect={setSelectedId}
-          onPageChange={handlePageChange}
-        />
-        <div className="grid gap-[14px]">
-          <ActivityCareCard />
-          <ActivityDetailPreviewCard event={selectedEvent} />
-        </div>
+    <div className="grid grid-cols-[1fr_360px] max-[1020px]:grid-cols-1 gap-[14px] items-start mt-4.5">
+      <ActivityTimelineCard
+        events={events}
+        isLoading={isBusy}
+        errorMessage={error instanceof Error ? error.message : undefined}
+        pagination={pagination}
+        selectedId={selectedEvent?.id ?? null}
+        onSelect={setSelectedId}
+        onPageChange={handlePageChange}
+      />
+      <div className="grid gap-[14px]">
+        {showCareCard ? <ActivityCareCard /> : null}
+        <ActivityDetailPreviewCard event={selectedEvent} />
       </div>
-    </>
+    </div>
   );
 }

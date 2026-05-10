@@ -2,6 +2,7 @@ import {
   countRecentMemoryEpisodes,
   getRecentMemoryEpisodes,
   isDev,
+  type MongoReadSource,
   SUBJECT_NAME,
 } from "@yuiju/utils";
 import { type ActivityItem, mapEpisodeToActivityItem } from "./activity-view";
@@ -23,6 +24,7 @@ const ACTIVITY_TYPES = [
 export interface QueryActivityEventsOptions {
   page?: number;
   pageSize?: number;
+  readFrom?: MongoReadSource;
 }
 
 export interface ActivityPagination {
@@ -64,6 +66,7 @@ export async function queryActivityEvents(
       subject: SUBJECT_NAME,
       isDev: isDev(),
       sortField: "createdAt" as const,
+      readFrom: options?.readFrom,
     };
 
     const total = await countRecentMemoryEpisodes(queryOptions);

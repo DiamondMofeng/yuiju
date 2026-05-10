@@ -7,9 +7,13 @@ import {
   type WorldStateData,
 } from "../../types";
 import { safeParseJson } from "../../utils";
-import { getRedis, syncRedisStateWrite } from "../client";
+import { getRedis, type RedisReadSource, syncRedisStateWrite } from "../client";
 
 export const REDIS_KEY_WORLD_STATE = isDev() ? "dev:yuiju:world:state" : "yuiju:world:state";
+
+type InitWorldStateDataOptions = {
+  readFrom?: RedisReadSource;
+};
 
 const isValidIsoDateString = (value: unknown): value is string => {
   return typeof value === "string" && dayjs(value).isValid();
@@ -62,13 +66,20 @@ const parseWeatherSnapshot = (value: unknown): WeatherSnapshot | null => {
   };
 };
 
-export const initWorldStateData = async (): Promise<WorldStateData> => {
-  const redis = getRedis();
+export const initWorldStateData = async (
+  options: InitWorldStateDataOptions = {},
+): Promise<WorldStateData> => {
+  const readFrom = options.readFrom ?? "primary";
+  const redis = getRedis(readFrom);
   const raw = await redis.hgetall(REDIS_KEY_WORLD_STATE);
   const timeStr = raw.time;
 
   if (!timeStr) {
     const time = dayjs();
+    if (readFrom === "sync") {
+      return { time, weather: null };
+    }
+
     const timeValue = time.toISOString();
     await redis.hset(REDIS_KEY_WORLD_STATE, "time", timeValue);
     await syncRedisStateWrite({
@@ -82,6 +93,10 @@ export const initWorldStateData = async (): Promise<WorldStateData> => {
   const parsed = dayjs(timeStr);
   if (!parsed.isValid()) {
     const time = dayjs();
+    if (readFrom === "sync") {
+      return { time, weather: null };
+    }
+
     const timeValue = time.toISOString();
     await redis.hset(REDIS_KEY_WORLD_STATE, "time", timeValue);
     await syncRedisStateWrite({

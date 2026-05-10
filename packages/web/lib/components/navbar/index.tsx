@@ -7,8 +7,6 @@ const navItems = [
   { key: "home", href: "/", label: "首页" },
   { key: "activity", href: "/activity", label: "动态" },
   { key: "diary", href: "/diary", label: "日记" },
-  { key: "logs", href: "/logs", label: "日志" },
-  { key: "settings", href: "/settings", label: "设置" },
 ];
 
 type NavbarProps = {

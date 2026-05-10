@@ -8,7 +8,7 @@ import {
   type RunningActionState,
 } from "../../types";
 import { safeParseJson } from "../../utils";
-import { getRedis, syncRedisStateWrite } from "../client";
+import { getRedis, type RedisReadSource, syncRedisStateWrite } from "../client";
 
 export const REDIS_KEY_CHARACTER_STATE = isDev()
   ? "dev:yuiju:charactor:state"
@@ -24,6 +24,10 @@ const DEFAULT_CHARACTER_STATE_DATA: CharacterStateData = {
   dailyActionsDoneToday: [],
   inventory: [],
   runningAction: null,
+};
+
+type InitCharacterStateDataOptions = {
+  readFrom?: RedisReadSource;
 };
 
 const isActionId = (value: string): value is ActionId => {
@@ -101,11 +105,18 @@ export const saveCharacterStateData = async (state: CharacterStateData): Promise
   });
 };
 
-export const initCharacterStateData = async (): Promise<CharacterStateData> => {
-  const redis = getRedis();
+export const initCharacterStateData = async (
+  options: InitCharacterStateDataOptions = {},
+): Promise<CharacterStateData> => {
+  const readFrom = options.readFrom ?? "primary";
+  const redis = getRedis(readFrom);
   const raw = await redis.hgetall(REDIS_KEY_CHARACTER_STATE);
 
   if (Object.keys(raw).length === 0) {
+    if (readFrom === "sync") {
+      return { ...DEFAULT_CHARACTER_STATE_DATA };
+    }
+
     await saveCharacterStateData(DEFAULT_CHARACTER_STATE_DATA);
     return { ...DEFAULT_CHARACTER_STATE_DATA };
   }
