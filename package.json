@@ -28,7 +28,6 @@
     "start:web": "pnpm --filter @yuiju/web run start",
     "start:python": "cd packages/python && uv run uvicorn server:app --host 0.0.0.0 --port 9196",
     "build:web": "pnpm --filter @yuiju/web run build",
-    "build:web:vercel": "cp yuiju.config.vercel.ts yuiju.config.ts && pnpm run build:web",
     "build:site": "pnpm --filter @yuiju/site run build",
     "dev:message": "pnpm --filter @yuiju/message run dev",
     "dev:world": "pnpm --filter @yuiju/world run dev",
