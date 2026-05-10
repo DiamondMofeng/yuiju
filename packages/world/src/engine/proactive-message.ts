@@ -72,7 +72,7 @@ async function shareActionCompletionToGroup(
   const result = await generateStructuredOutput({
     model: flashModel,
     providerOptions: {
-      Siliconflow: {
+      flash: {
         enable_thinking: false,
       },
     },

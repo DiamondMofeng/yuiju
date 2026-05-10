@@ -182,7 +182,7 @@ export class LLMManager {
       const result = await generateStructuredOutput({
         model: flashModel,
         providerOptions: {
-          Siliconflow: {
+          flash: {
             enable_thinking: false,
           },
         },
@@ -274,7 +274,7 @@ export class LLMManager {
     const result = await generateStructuredOutput({
       model: flashModel,
       providerOptions: {
-        Siliconflow: {
+        flash: {
           enable_thinking: false,
         },
       },

@@ -80,7 +80,7 @@ export async function chooseActionAgent(
       const { output } = await generateStructuredOutput({
         model: strongModel,
         providerOptions: {
-          Siliconflow: {
+          strong: {
             enable_thinking: true,
           },
         },
@@ -160,7 +160,7 @@ export async function chooseFoodAgent(
       const { output } = await generateStructuredOutput({
         model: flashModel,
         providerOptions: {
-          Siliconflow: {
+          flash: {
             enable_thinking: false,
           },
         },
@@ -215,7 +215,7 @@ export async function chooseShopProductAgent(
       const { output } = await generateStructuredOutput({
         model: visionModel,
         providerOptions: {
-          Siliconflow: {
+          vision: {
             enable_thinking: false,
           },
         },
@@ -268,7 +268,7 @@ export async function chooseCafeCoffeeAgent(
       const { output } = await generateStructuredOutput({
         model: visionModel,
         providerOptions: {
-          Siliconflow: {
+          vision: {
             enable_thinking: false,
           },
         },
@@ -319,7 +319,7 @@ export async function chooseShrinePrayerAgent(
       const { output } = await generateStructuredOutput({
         model: flashModel,
         providerOptions: {
-          Siliconflow: {
+          flash: {
             enable_thinking: false,
           },
         },

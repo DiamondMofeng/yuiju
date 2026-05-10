@@ -486,7 +486,7 @@ async function generateImageDescription(segment: ImageMessageSegment): Promise<s
     const result = await generateText({
       model: visionModel,
       providerOptions: {
-        Siliconflow: {
+        vision: {
           enable_thinking: false,
         },
       },

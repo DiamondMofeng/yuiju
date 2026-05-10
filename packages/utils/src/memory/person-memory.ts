@@ -510,7 +510,7 @@ async function generatePersonMemoryProposal(
   const { output } = await generateStructuredOutput({
     model: visionModel,
     providerOptions: {
-      Siliconflow: {
+      vision: {
         enable_thinking: false,
       },
     },
@@ -557,7 +557,7 @@ function reviewPersonMemoryProposalTool(input: Omit<PersonMemoryReviewContext, "
       const { output } = await generateStructuredOutput({
         model: visionModel,
         providerOptions: {
-          Siliconflow: {
+          vision: {
             enable_thinking: false,
           },
         },
