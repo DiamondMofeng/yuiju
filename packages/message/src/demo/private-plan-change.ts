@@ -3,12 +3,11 @@ import {
   type CharacterStateData,
   closeRedis,
   connectDB,
-  getRedis,
   initCharacterStateData,
   MajorScene,
   type PlanState,
   planManager,
-  REDIS_KEY_CHARACTER_STATE,
+  saveCharacterStateData,
   savePlanStateData,
 } from "@yuiju/utils";
 import mongoose from "mongoose";
@@ -54,22 +53,6 @@ function createDemoInitialPlanState(now: string): PlanState {
     ],
     updatedAt: now,
   };
-}
-
-async function saveCharacterStateForDemo(state: CharacterStateData) {
-  const redis = getRedis();
-
-  await redis.hset(REDIS_KEY_CHARACTER_STATE, {
-    action: state.action,
-    location: JSON.stringify(state.location),
-    stamina: state.stamina,
-    satiety: state.satiety,
-    mood: state.mood,
-    money: state.money,
-    dailyActionsDoneToday: JSON.stringify(state.dailyActionsDoneToday),
-    inventory: JSON.stringify(state.inventory ?? []),
-    runningAction: JSON.stringify(state.runningAction),
-  });
 }
 
 function createDemoPrivateMessage(): StoredPrivateMessage {
@@ -128,7 +111,7 @@ export async function main() {
   try {
     await connectDB();
     await stickerState.initialize();
-    await saveCharacterStateForDemo(demoCharacterState);
+    await saveCharacterStateData(demoCharacterState);
     await savePlanStateData(initialPlanState);
 
     const message = createDemoPrivateMessage();
@@ -151,7 +134,7 @@ export async function main() {
     }
 
     if (RESTORE_CHARACTER_AFTER_DEMO) {
-      await saveCharacterStateForDemo(originalCharacterState);
+      await saveCharacterStateData(originalCharacterState);
       console.log("已恢复 demo 前的角色状态。");
     }
 
