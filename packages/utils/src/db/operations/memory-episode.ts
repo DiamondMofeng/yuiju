@@ -1,7 +1,7 @@
 import dayjs from "dayjs";
 import type { MemoryEpisodeType, MemoryEpisodeWriteInput } from "../../memory/episode";
-import { connectDB } from "../connect";
-import { type IMemoryEpisode, MemoryEpisodeModel } from "../schema/memory-episode.schema";
+import { hasSyncMongoUri, type MongoReadSource } from "../connect";
+import { getMemoryEpisodeModel, type IMemoryEpisode } from "../schema/memory-episode.schema";
 
 export interface GetRecentMemoryEpisodesOptions {
   limit?: number;
@@ -14,24 +14,30 @@ export interface GetRecentMemoryEpisodesOptions {
   happenedBefore?: Date;
   sortDirection?: "asc" | "desc";
   sortField?: "happenedAt" | "createdAt";
+  readFrom?: MongoReadSource;
 }
 
 /**
  * 保存统一 Episode 到 MongoDB。
  */
 export async function saveMemoryEpisode(input: MemoryEpisodeWriteInput): Promise<IMemoryEpisode> {
-  await connectDB();
-  const episode = new MemoryEpisodeModel({
+  const model = await getMemoryEpisodeModel();
+  const episode = new model({
     ...input,
     payload: input.payload as Record<string, unknown>,
     isDev: input.isDev ?? false,
   });
-  return await episode.save();
+  const savedEpisode = await episode.save();
+  await syncMemoryEpisodeDocument(savedEpisode);
+  return savedEpisode;
 }
 
-export async function getMemoryEpisodeById(id: string): Promise<IMemoryEpisode | null> {
-  await connectDB();
-  return await MemoryEpisodeModel.findById(id).exec();
+export async function getMemoryEpisodeById(
+  id: string,
+  options: { readFrom?: MongoReadSource } = {},
+): Promise<IMemoryEpisode | null> {
+  const model = await getMemoryEpisodeModel(options.readFrom);
+  return await model.findById(id).exec();
 }
 
 export interface UpdateMemoryEpisodeByIdInput {
@@ -43,8 +49,6 @@ export async function updateMemoryEpisodeById(
   id: string,
   input: UpdateMemoryEpisodeByIdInput,
 ): Promise<IMemoryEpisode | null> {
-  await connectDB();
-
   const update: Record<string, unknown> = {};
 
   if (input.summaryText !== undefined) {
@@ -55,11 +59,19 @@ export async function updateMemoryEpisodeById(
     update.payload = input.payload;
   }
 
+  const model = await getMemoryEpisodeModel();
+
   if (Object.keys(update).length === 0) {
-    return await MemoryEpisodeModel.findById(id).exec();
+    return await model.findById(id).exec();
   }
 
-  return await MemoryEpisodeModel.findByIdAndUpdate(id, { $set: update }, { new: true }).exec();
+  const updatedEpisode = await model.findByIdAndUpdate(id, { $set: update }, { new: true }).exec();
+
+  if (updatedEpisode) {
+    await syncMemoryEpisodeDocument(updatedEpisode);
+  }
+
+  return updatedEpisode;
 }
 
 /**
@@ -72,13 +84,14 @@ export async function updateMemoryEpisodeById(
 export async function getRecentMemoryEpisodes(
   options: GetRecentMemoryEpisodesOptions = {},
 ): Promise<IMemoryEpisode[]> {
-  await connectDB();
   const filter = buildRecentMemoryEpisodesFilter(options);
 
   const sortDirection = options.sortDirection === "asc" ? 1 : -1;
   const primarySortField = options.sortField ?? "happenedAt";
+  const model = await getMemoryEpisodeModel(options.readFrom);
 
-  return await MemoryEpisodeModel.find(filter)
+  return await model
+    .find(filter)
     .sort(
       primarySortField === "createdAt"
         ? { createdAt: sortDirection, happenedAt: sortDirection }
@@ -92,9 +105,38 @@ export async function getRecentMemoryEpisodes(
 export async function countRecentMemoryEpisodes(
   options: GetRecentMemoryEpisodesOptions = {},
 ): Promise<number> {
-  await connectDB();
+  const model = await getMemoryEpisodeModel(options.readFrom);
+  return await model.countDocuments(buildRecentMemoryEpisodesFilter(options)).exec();
+}
 
-  return await MemoryEpisodeModel.countDocuments(buildRecentMemoryEpisodesFilter(options)).exec();
+async function syncMemoryEpisodeDocument(episode: IMemoryEpisode): Promise<void> {
+  if (!hasSyncMongoUri()) {
+    return;
+  }
+
+  try {
+    const syncModel = await getMemoryEpisodeModel("sync");
+    await syncModel
+      .replaceOne(
+        { _id: episode._id },
+        {
+          _id: episode._id,
+          source: episode.source,
+          type: episode.type,
+          subject: episode.subject,
+          happenedAt: episode.happenedAt,
+          summaryText: episode.summaryText,
+          payload: episode.payload,
+          isDev: episode.isDev,
+          createdAt: episode.createdAt,
+          updatedAt: episode.updatedAt,
+        },
+        { upsert: true },
+      )
+      .exec();
+  } catch (error) {
+    console.error(`Sync Mongo write failed: memory_episode ${episode._id}`, error);
+  }
 }
 
 function buildRecentMemoryEpisodesFilter(
