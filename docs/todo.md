@@ -1,5 +1,6 @@
 ## TODO
 
+- 群聊消息也存一下 redis，用于服务重启时可以恢复消息记录，如果时间过长的话直接丢弃
 - Action 模块能力拓展
 - 调研一下 b 站直播的接入
   - [blive-message-listener](https://github.com/ddiu8081/blive-message-listener)

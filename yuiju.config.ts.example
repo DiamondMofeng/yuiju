@@ -13,6 +13,36 @@ const config = defineYuijuConfig({
   llm: {
     deepseekApiKey: "xxx",
     siliconflowApiKey: "xxx",
+    models: {
+      small: [
+        {
+          baseUrl: "https://api.siliconflow.cn/v1",
+          apiKey: "xxx",
+          model: "Qwen/Qwen3-8B",
+        },
+      ],
+      strong: [
+        {
+          baseUrl: "https://api.siliconflow.cn/v1",
+          apiKey: "xxx",
+          model: "deepseek-ai/DeepSeek-V3.2",
+        },
+      ],
+      flash: [
+        {
+          baseUrl: "https://api.siliconflow.cn/v1",
+          apiKey: "xxx",
+          model: "MiniMaxAI/MiniMax-M2.5",
+        },
+      ],
+      vision: [
+        {
+          baseUrl: "https://api.siliconflow.cn/v1",
+          apiKey: "xxx",
+          model: "Qwen/Qwen3.5-397B-A17B",
+        },
+      ],
+    },
   },
   message: {
     internalApi: {

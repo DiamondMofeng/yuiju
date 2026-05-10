@@ -1,4 +1,4 @@
-import { qwen3Model, SUBJECT_NAME } from "@yuiju/utils";
+import { SUBJECT_NAME, visionModel } from "@yuiju/utils";
 import { generateText } from "ai";
 import type { AllHandlers, NCWebsocket, Receive } from "node-napcat-ts";
 import { imageCacheState } from "@/state/image-cache";
@@ -484,7 +484,7 @@ async function generateImageDescription(segment: ImageMessageSegment): Promise<s
 
   try {
     const result = await generateText({
-      model: qwen3Model,
+      model: visionModel,
       providerOptions: {
         Siliconflow: {
           enable_thinking: false,

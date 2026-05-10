@@ -1,16 +1,8 @@
-import { createDeepSeek } from "@ai-sdk/deepseek";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { wrapLanguageModel } from "ai";
 import { getYuijuConfig } from "../config";
 
 const config = getYuijuConfig();
-
-/**
- * DeepSeek 客户端统一在 utils 层初始化，避免调用方继续隐式依赖环境变量。
- */
-export const deepseekProvider = createDeepSeek({
-  apiKey: config.llm.deepseekApiKey,
-});
 
 /**
  * SiliconFlow 兼容 OpenAI 接口，这里统一收口为公共客户端，便于多包复用小模型与第三方模型。
@@ -49,7 +41,7 @@ export const flashModel = wrapLanguageModel({
 /**
  * 主要用于图片描述（识图场景）
  */
-export const qwen3Model = wrapLanguageModel({
+export const visionModel = wrapLanguageModel({
   model: siliconflow("Qwen/Qwen3.5-397B-A17B"),
   middleware: [],
 });

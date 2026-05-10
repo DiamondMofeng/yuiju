@@ -5,7 +5,7 @@ import dayjs from "dayjs";
 import { z } from "zod";
 import { getYuijuConfig } from "../config";
 import { createToolCallLoggingHooks, generateStructuredOutput } from "../llm";
-import { qwen3Model } from "../llm/models";
+import { visionModel } from "../llm/models";
 import { logger } from "../logger";
 import { buildPersonMemoryProposalPrompt, buildPersonMemoryReviewPrompt } from "../prompt";
 import { formatProjectTime } from "../time";
@@ -508,7 +508,7 @@ async function generatePersonMemoryProposal(
   input: PersonMemoryProposalContext,
 ): Promise<PersonMemoryProposal | null> {
   const { output } = await generateStructuredOutput({
-    model: qwen3Model,
+    model: visionModel,
     providerOptions: {
       Siliconflow: {
         enable_thinking: false,
@@ -555,7 +555,7 @@ function reviewPersonMemoryProposalTool(input: Omit<PersonMemoryReviewContext, "
     execute: async ({ proposal }) => {
       const normalizedProposal = normalizeProposal(proposal);
       const { output } = await generateStructuredOutput({
-        model: qwen3Model,
+        model: visionModel,
         providerOptions: {
           Siliconflow: {
             enable_thinking: false,

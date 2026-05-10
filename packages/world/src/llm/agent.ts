@@ -20,10 +20,10 @@ import {
   getPersonMemoryTool,
   listPersonMemoriesTool,
   queryWorldMapTool,
-  qwen3Model,
   reviewPlanChangesTool,
   strongModel,
   todayEventSearchTool,
+  visionModel,
 } from "@yuiju/utils";
 import { Output, stepCountIs } from "ai";
 import dayjs from "dayjs";
@@ -213,7 +213,7 @@ export async function chooseShopProductAgent(
   for (let i = 0; i < RETRY_COUNT; i++) {
     try {
       const { output } = await generateStructuredOutput({
-        model: qwen3Model,
+        model: visionModel,
         providerOptions: {
           Siliconflow: {
             enable_thinking: false,
@@ -266,7 +266,7 @@ export async function chooseCafeCoffeeAgent(
   for (let i = 0; i < RETRY_COUNT; i++) {
     try {
       const { output } = await generateStructuredOutput({
-        model: qwen3Model,
+        model: visionModel,
         providerOptions: {
           Siliconflow: {
             enable_thinking: false,
