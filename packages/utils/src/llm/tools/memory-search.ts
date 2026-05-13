@@ -1,7 +1,6 @@
 import type { Tool } from "ai";
 import dayjs from "dayjs";
 import { z } from "zod";
-import { logger } from "../../logger";
 import { searchDiaries, searchEpisodes } from "../../memory";
 
 const todayEventSearchInputSchema = z.strictObject({
@@ -40,7 +39,6 @@ export const todayEventSearchTool: Tool = {
           : today.hour(input.endHour).minute(59).second(59).format("YYYY-MM-DD HH:mm:ss"),
       timeSort: input.timeSort ?? "desc",
     });
-    logger.info("[工具调用][todayEventSearch]", input, result);
     return result;
   },
 };
@@ -55,7 +53,6 @@ export const diarySearchTool: Tool = {
       startTime: input.startDate ? `${input.startDate} 00:00:00` : undefined,
       endTime: input.endDate ? `${input.endDate} 23:59:59` : undefined,
     });
-    logger.info("[工具调用][diarySearch]", input, result);
     return result;
   },
 };

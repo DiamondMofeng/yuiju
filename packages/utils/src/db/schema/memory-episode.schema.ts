@@ -15,6 +15,7 @@ export interface IMemoryEpisode extends Document {
   type: MemoryEpisodeType;
   subject: string;
   happenedAt: Date;
+  /** 用于查询今日记忆时给 LLM 看的 */
   summaryText: string;
   payload: Record<string, unknown>;
   isDev: boolean;
