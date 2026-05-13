@@ -401,6 +401,7 @@ export const homeAction: ActionMetadata[] = [
     },
     async executor(context) {
       await context.characterState.setAction(ActionId.Sleep);
+      await context.characterState.clearDailyActions();
 
       // 进入正式睡眠后，后台异步生成“当天日记”，不阻塞行为主链路。
       generateDiaryForDate({

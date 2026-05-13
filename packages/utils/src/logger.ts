@@ -120,7 +120,7 @@ export function createYuijuLogger(options: CreateYuijuLoggerOptions = {}) {
         datePattern: "YYYY-MM-DD",
         maxSize: process.env.LOG_MAX_SIZE || "20m",
         maxFiles: process.env.LOG_MAX_FILES || "14d",
-        zippedArchive: true,
+        zippedArchive: false,
         level: logLevel,
         format: buildFileFormat(),
       }),

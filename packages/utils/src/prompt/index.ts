@@ -5,5 +5,6 @@ export * from "./message";
 export * from "./person-memory";
 export * from "./plan-review";
 export * from "./proactive-message";
+export * from "./world-guide";
 export * from "./world-map";
 export * from "./world-view";

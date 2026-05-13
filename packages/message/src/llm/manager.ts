@@ -12,7 +12,7 @@ import {
   listPersonMemoriesTool,
   messageHistorySchemaPrompt,
   queryStateTool,
-  queryWorldMapTool,
+  queryStaticGuideTool,
   todayEventSearchTool,
 } from "@yuiju/utils";
 import { generateText, Output, stepCountIs } from "ai";
@@ -203,7 +203,7 @@ export class LLMManager {
           listPersonMemories: listPersonMemoriesTool,
           getPersonMemory: getPersonMemoryTool,
           queryStateTool: queryStateTool,
-          queryWorldMap: queryWorldMapTool,
+          queryStaticGuide: queryStaticGuideTool,
           proposePlanChanges: createChatPlanChangesProposalTool({
             scene: "group",
             summary,
@@ -294,7 +294,7 @@ export class LLMManager {
         listPersonMemories: listPersonMemoriesTool,
         getPersonMemory: getPersonMemoryTool,
         queryStateTool: queryStateTool,
-        queryWorldMap: queryWorldMapTool,
+        queryStaticGuide: queryStaticGuideTool,
         proposePlanChanges: createChatPlanChangesProposalTool({
           scene: "private",
           summary,

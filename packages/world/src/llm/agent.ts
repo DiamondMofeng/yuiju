@@ -19,7 +19,7 @@ import {
   generateStructuredOutput,
   getPersonMemoryTool,
   listPersonMemoriesTool,
-  queryWorldMapTool,
+  queryStaticGuideTool,
   reviewPlanChangesTool,
   strongModel,
   todayEventSearchTool,
@@ -90,7 +90,7 @@ export async function chooseActionAgent(
           listPersonMemories: listPersonMemoriesTool,
           getPersonMemory: getPersonMemoryTool,
           queryAvailableFood: queryAvailableFood(context),
-          queryWorldMap: queryWorldMapTool,
+          queryStaticGuide: queryStaticGuideTool,
           reviewPlanChanges: reviewPlanChangesTool(),
         },
         output: Output.object({

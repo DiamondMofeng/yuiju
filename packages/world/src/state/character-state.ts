@@ -121,7 +121,7 @@ export class CharacterState implements ICharacterState {
       this.dailyActionsDoneToday.push(action);
     }
 
-    this.save();
+    await this.save();
   }
 
   async clearDailyActions(): Promise<void> {
