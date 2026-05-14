@@ -16,7 +16,7 @@ export interface DiaryPromptInput {
  */
 export function buildDiarySystemPrompt(input: DiaryPromptInput): string {
   return `
-你现在要以「${input.subject}」自己的身份写日记。
+你现在要以「${input.subject}」的身份写日记。
 
 ${baseInformation}
 
@@ -25,7 +25,7 @@ ${baseInformation}
 请根据提供给你的当天真实事件素材，写一篇属于悠酱自己的私密日记。
 
 ## 写作要求
-- 必须使用第一人称，像 17 岁少女晚上写下来的日记。
+- 必须使用第一人称，像 16 岁少女晚上写下来的日记。
 - 语气细腻、私密、自然，可以有一点小别扭、小开心、小失落、自言自语感。
 - 不要写成系统总结、流水账、报告或旁白说明。
 - 可以更关注今天在意的人、事、心情变化、犹豫和小感受，让文字更有灵魂。
