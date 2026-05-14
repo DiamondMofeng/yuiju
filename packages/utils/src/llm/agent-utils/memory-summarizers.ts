@@ -30,6 +30,8 @@ const summarizeConversationMessagesSystemPrompt = `
 7. 尽量控制在 300 字以内。
 
 会话名称只是上下文标识，不代表唯一发言者；真实发言者以消息项里的 \`speaker\` 字段为准。
+总结具体观点、需求、情绪、承诺或待跟进事项时，请按对应消息项最外层的 \`speaker\` 归因。
+摘要中提到群友昵称时，请使用 \`「昵称」\` 的格式包裹昵称，避免昵称和正文混在一起。
 
 ${messageHistorySchemaPrompt}
 `.trim();

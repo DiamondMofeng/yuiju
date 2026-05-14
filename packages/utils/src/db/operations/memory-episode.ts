@@ -1,17 +1,29 @@
 import dayjs from "dayjs";
-import type { MemoryEpisodeType, MemoryEpisodeWriteInput } from "../../memory/episode";
+import type {
+  MemoryEpisodeSource,
+  MemoryEpisodeType,
+  MemoryEpisodeWriteInput,
+} from "../../memory/episode";
 import { hasSyncMongoUri, type MongoReadSource } from "../connect";
 import { getMemoryEpisodeModel, type IMemoryEpisode } from "../schema/memory-episode.schema";
 
 export interface GetRecentMemoryEpisodesOptions {
   limit?: number;
   skip?: number;
+  sources?: MemoryEpisodeSource[];
+  sourceOrTypes?: {
+    sources?: MemoryEpisodeSource[];
+    types?: MemoryEpisodeType[];
+  };
+  excludeSources?: MemoryEpisodeSource[];
   types?: MemoryEpisodeType[];
+  excludeTypes?: MemoryEpisodeType[];
   subject?: string;
   isDev?: boolean;
   onlyDate?: Date;
   happenedAfter?: Date;
   happenedBefore?: Date;
+  keyword?: string;
   sortDirection?: "asc" | "desc";
   sortField?: "happenedAt" | "createdAt";
   readFrom?: MongoReadSource;
@@ -143,9 +155,29 @@ function buildRecentMemoryEpisodesFilter(
   options: GetRecentMemoryEpisodesOptions,
 ): Record<string, unknown> {
   const filter: Record<string, unknown> = {};
+  const andConditions: Record<string, unknown>[] = [];
 
+  if (options.sources?.length) {
+    filter.source = { $in: options.sources };
+  }
+  if (options.sourceOrTypes?.sources?.length || options.sourceOrTypes?.types?.length) {
+    const orConditions: Record<string, unknown>[] = [];
+    if (options.sourceOrTypes.sources?.length) {
+      orConditions.push({ source: { $in: options.sourceOrTypes.sources } });
+    }
+    if (options.sourceOrTypes.types?.length) {
+      orConditions.push({ type: { $in: options.sourceOrTypes.types } });
+    }
+    andConditions.push({ $or: orConditions });
+  }
+  if (options.excludeSources?.length) {
+    andConditions.push({ source: { $nin: options.excludeSources } });
+  }
   if (options.types?.length) {
     filter.type = { $in: options.types };
+  }
+  if (options.excludeTypes?.length) {
+    andConditions.push({ type: { $nin: options.excludeTypes } });
   }
   if (options.subject) {
     filter.subject = options.subject;
@@ -170,5 +202,35 @@ function buildRecentMemoryEpisodesFilter(
     }
   }
 
+  const keyword = options.keyword?.trim();
+  if (keyword) {
+    const pattern = new RegExp(escapeRegExp(keyword), "i");
+    andConditions.push({
+      $or: [
+        { summaryText: pattern },
+        { source: pattern },
+        { type: pattern },
+        { "payload.action": pattern },
+        { "payload.reason": pattern },
+        { "payload.counterpartyName": pattern },
+        { "payload.eventName": pattern },
+        { "payload.before.title": pattern },
+        { "payload.after.title": pattern },
+        { "payload.changeType": pattern },
+        { "payload.planScope": pattern },
+        { "payload.location.major": pattern },
+        { "payload.location.minor": pattern },
+      ],
+    });
+  }
+
+  if (andConditions.length > 0) {
+    filter.$and = andConditions;
+  }
+
   return filter;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

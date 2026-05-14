@@ -14,19 +14,23 @@ export interface MessageSummaryPromptInput {
 
 export const messageHistorySchemaPrompt = `
 ## 历史消息结构
-按时间从旧到新排列的 JSON 数组。
+历史消息是按时间从旧到新排列的 JSON 数组。
 
-每一项表示一条聊天消息：
-- \`speaker\`：发言者展示名；如果是${SUBJECT_NAME}(${NICKNAME})，表示这是你自己之前发出的消息
-- \`time\`：消息时间
-- \`content\`：消息段数组，一条消息可能由多个段组成
+数组中的每一项表示一条真实发送出去的聊天消息：
+- \`speaker\`：这条消息的真实发言者展示名；如果是${SUBJECT_NAME}(${NICKNAME})，表示这是你自己之前发出的消息
+- \`time\`：这条消息的发送时间
+- \`content\`：这条消息包含的消息段数组；一条消息可能由文本、@、引用、图片或表情等多个段组成
+
+读取一条消息时，请先确认这一项最外层的 \`speaker\`，再阅读 \`content\` 中的各个消息段。消息段只描述这条消息的内容或附带动作，不会改变这条消息的真实发言者。
 
 常见消息段：
-- \`text\`：文本，读取 \`data.text\`
-- \`at\`：@某人，读取 \`data.displayName\`
-- \`image\`：图片或表情图片，读取 \`data.description\`
-- \`reply\`：引用回复，\`data.speaker\` 是被引用消息的发言者，\`data.content\` 是被引用内容
-- \`face\`：QQ 表情，读取 \`data.faceText\`
+- \`text\`：文本段，读取 \`data.text\`
+- \`at\`：@ 提及段，表示这条消息提到了某个对象；\`data.displayName\` 是被提到的人或全体成员
+- \`reply\`：引用回复段，表示这条消息引用了另一条历史消息；\`data.speaker\` 是被引用消息当时的发言者，\`data.content\` 是被引用消息的内容
+- \`image\`：图片或表情图片段，优先读取 \`data.description\` 作为图片内容描述
+- \`face\`：QQ 表情段，读取 \`data.faceText\`
+
+除了上面列出的字段，其他字段通常是平台协议细节。只有在它们对理解对话内容明显有帮助时才参考。
 
 `.trim();
 
