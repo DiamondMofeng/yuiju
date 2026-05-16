@@ -16,6 +16,10 @@
   "packageManager": "pnpm@10.14.0",
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.64.0",
+    "@satorijs/adapter-onebot": "^6.0.2",
+    "@satorijs/core": "^4.6.0",
+    "@satorijs/element": "^3.2.0",
+    "@satorijs/protocol": "^1.7.0",
     "@yuiju/source": "workspace:*",
     "@yuiju/utils": "workspace:*"
   }
