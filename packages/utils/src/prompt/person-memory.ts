@@ -1,5 +1,4 @@
 export interface PersonMemoryProposalPromptInput {
-  personId: string;
   scene: "private" | "group";
   nickname: string;
   interactionMaterial: string;
@@ -8,8 +7,8 @@ export interface PersonMemoryProposalPromptInput {
 }
 
 export interface PersonMemoryReviewPromptInput {
-  personId: string;
   scene: "private" | "group";
+  nickname: string;
   interactionMaterial: string;
   existingMemoryText: string;
   proposalJson: string;
@@ -20,7 +19,6 @@ export function buildPersonMemoryProposalPrompt(input: PersonMemoryProposalPromp
 你是人物长期记忆更新 agent。你的任务是根据“旧人物记忆对象”和“本次互动材料”，决定这轮是否需要写回人物长期记忆。
 
 ## 当前人物
-- personId: ${input.personId}
 - scene: ${input.scene}
 - 当前程序昵称: ${input.nickname}
 
@@ -73,8 +71,8 @@ export function buildPersonMemoryReviewPrompt(input: PersonMemoryReviewPromptInp
 你是人物长期记忆审查 agent。你的任务是判断这份人物记忆修改提案是否应该被接受。
 
 ## 当前人物
-- personId: ${input.personId}
 - scene: ${input.scene}
+- 当前程序昵称: ${input.nickname}
 
 ## 旧人物记忆 JSON 对象
 ${input.existingMemoryText}

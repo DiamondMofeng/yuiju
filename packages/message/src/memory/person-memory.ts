@@ -2,7 +2,6 @@ import type { PersonMemoryUpdateInput } from "@yuiju/utils";
 import { getTimeWithWeekday, updatePersonMemory } from "@yuiju/utils";
 import dayjs from "dayjs";
 import {
-  getProtocolMessageSenderName,
   projectHistoryMessageContent,
   type StoredGroupMessage,
   type StoredPrivateMessage,
@@ -19,13 +18,11 @@ export interface ChatWindowState<TMessage extends StoredProtocolMessage> {
 interface ChatWindowTranscriptItem {
   messageId: number;
   speaker: string;
-  speakerUserId: number;
   time: string;
   content: ReturnType<typeof projectHistoryMessageContent>;
 }
 
 interface GroupPersonCandidate {
-  personId: string;
   nickname: string;
   interactionCount: number;
 }
@@ -33,17 +30,19 @@ interface GroupPersonCandidate {
 export function buildPrivatePersonMemoryUpdateInput(
   state: ChatWindowState<StoredPrivateMessage>,
 ): PersonMemoryUpdateInput | null {
-  const counterpartyUserId = state.messages[0]?.user_id;
-  if (!counterpartyUserId) {
+  const nickname = state.messages
+    .filter((message) => message.sender.user_id !== message.self_id)
+    .map((message) => message.sender.card?.trim() || message.sender.nickname?.trim() || null)
+    .find((senderName) => senderName !== null);
+
+  if (!nickname) {
     return null;
   }
 
   return {
-    personId: String(counterpartyUserId),
-    nickname: state.sessionLabel,
-    interactionCount: state.messages.filter(
-      (message) => message.sender.user_id === counterpartyUserId,
-    ).length,
+    nickname,
+    interactionCount: state.messages.filter((message) => message.sender.user_id !== message.self_id)
+      .length,
     interactionMaterial: buildInteractionMaterial({
       scene: "private",
       sessionLabel: state.sessionLabel,
@@ -58,25 +57,27 @@ export function buildPrivatePersonMemoryUpdateInput(
 export function buildGroupPersonMemoryUpdateInputs(
   state: ChatWindowState<StoredGroupMessage>,
 ): PersonMemoryUpdateInput[] {
-  const candidateByPersonId = new Map<string, GroupPersonCandidate>();
+  const candidateByNickname = new Map<string, GroupPersonCandidate>();
 
   for (const message of state.messages) {
     if (message.sender.user_id === message.self_id) {
       continue;
     }
 
-    const personId = String(message.sender.user_id);
-    const existingCandidate = candidateByPersonId.get(personId);
+    const nickname = message.sender.card?.trim() || message.sender.nickname?.trim();
+    if (!nickname) {
+      continue;
+    }
 
-    candidateByPersonId.set(personId, {
-      personId,
-      nickname: getProtocolMessageSenderName(message),
+    const existingCandidate = candidateByNickname.get(nickname);
+
+    candidateByNickname.set(nickname, {
+      nickname,
       interactionCount: existingCandidate ? existingCandidate.interactionCount + 1 : 1,
     });
   }
 
-  return Array.from(candidateByPersonId.values()).map((candidate) => ({
-    personId: candidate.personId,
+  return Array.from(candidateByNickname.values()).map((candidate) => ({
     nickname: candidate.nickname,
     interactionCount: candidate.interactionCount,
     interactionMaterial: buildInteractionMaterial({
@@ -119,11 +120,14 @@ function buildInteractionMaterial(input: {
   messages: StoredProtocolMessage[];
   candidate?: GroupPersonCandidate;
 }): string {
-  const transcript = input.messages.map((message) => buildTranscriptItem(message));
+  const transcript: ChatWindowTranscriptItem[] = input.messages.map((message) => ({
+    messageId: message.message_id,
+    speaker: message.sender.card?.trim() || message.sender.nickname?.trim() || "未知用户",
+    time: getTimeWithWeekday(dayjs.unix(message.time)),
+    content: projectHistoryMessageContent(message.message),
+  }));
   const sceneLabel = input.scene === "private" ? "私聊" : "群聊";
-  const candidateText = input.candidate
-    ? `\n当前正在判断的人物：${input.candidate.nickname}（${input.candidate.personId}）`
-    : "";
+  const candidateText = input.candidate ? `\n当前正在判断的人物：${input.candidate.nickname}` : "";
 
   return [
     `场景：${sceneLabel}`,
@@ -132,14 +136,4 @@ function buildInteractionMaterial(input: {
     "对话材料：",
     JSON.stringify(transcript, null, 2),
   ].join("\n");
-}
-
-function buildTranscriptItem(message: StoredProtocolMessage): ChatWindowTranscriptItem {
-  return {
-    messageId: message.message_id,
-    speaker: getProtocolMessageSenderName(message),
-    speakerUserId: message.sender.user_id,
-    time: getTimeWithWeekday(dayjs.unix(message.time)),
-    content: projectHistoryMessageContent(message.message),
-  };
 }
