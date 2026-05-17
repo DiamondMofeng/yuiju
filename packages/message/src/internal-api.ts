@@ -5,7 +5,7 @@ import type { NCWebsocket } from "node-napcat-ts";
 import { llmManager } from "@/llm/manager";
 import { stickerState } from "@/state/sticker";
 import { logger } from "@/utils/logger";
-import { sendAndRecordGroupProactiveMessage } from "@/utils/reply";
+import { sendAndRecordGroupProactiveMessage } from "@/utils/message";
 
 interface InternalApiInput {
   napcat: NCWebsocket;

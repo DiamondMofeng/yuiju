@@ -25,8 +25,11 @@ export const messageHistorySchemaPrompt = `
 常见消息段：
 - \`text\`：文本段，读取 \`data.text\`
 - \`at\`：@ 提及段，表示这条消息提到了某个对象；\`data.displayName\` 是被提到的人或全体成员
+- \`reply\`：引用/回复段，表示这条消息引用了另一条消息；\`data.speaker\` 是被引用消息的发言者，\`data.content\` 是被引用消息的内容段数组
 - \`image\`：图片或表情图片段，优先读取 \`data.description\` 作为图片内容描述
 - \`face\`：QQ 表情段，读取 \`data.faceText\`
+
+读取 \`reply\` 时，请把它理解为当前消息附带的引用上下文；它不会改变当前消息最外层的 \`speaker\`。
 
 除了上面列出的字段，其他字段通常是平台协议细节。只有在它们对理解对话内容明显有帮助时才参考。
 

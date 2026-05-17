@@ -3,15 +3,13 @@ import type { Session } from "@satorijs/core";
 import { type NCWebsocket, Structs } from "node-napcat-ts";
 import { llmManager } from "@/llm/manager";
 import { stickerState } from "@/state/sticker";
+import { getReplyDelayMs } from "./delay";
 import {
   createStoredGroupMessageFromFetched,
   createStoredPrivateMessageFromFetched,
-  createStoredSatoriGroupBotMessage,
-  createStoredSatoriPrivateBotMessage,
-  getReplyDelayMs,
-  type StoredSatoriGroupMessage,
-  type StoredSatoriPrivateMessage,
-} from "@/utils/message";
+} from "./napcat";
+import { createStoredSatoriGroupBotMessage, createStoredSatoriPrivateBotMessage } from "./satori";
+import type { StoredSatoriGroupMessage, StoredSatoriPrivateMessage } from "./types";
 
 /**
  * 发送并记录完整的私聊回复。

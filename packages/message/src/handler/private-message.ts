@@ -2,8 +2,11 @@ import type { Session } from "@satorijs/core";
 import { getYuijuConfig } from "@yuiju/utils";
 import { llmManager } from "@/llm/manager";
 import { logger } from "@/utils/logger";
-import { createStoredSatoriPrivateMessage, getProtocolMessageSenderName } from "@/utils/message";
-import { sendAndRecordSatoriPrivateReply } from "@/utils/reply";
+import {
+  createStoredSatoriPrivateMessage,
+  getProtocolMessageSenderName,
+  sendAndRecordSatoriPrivateReply,
+} from "@/utils/message";
 import { closeGroupMessage, openGroupMessage } from "./group-message";
 
 const config = getYuijuConfig();

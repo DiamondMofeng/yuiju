@@ -2,8 +2,7 @@ import type { Session } from "@satorijs/core";
 import { ActionId, getYuijuConfig, initCharacterStateData } from "@yuiju/utils";
 import { llmManager } from "@/llm/manager";
 import { logger } from "@/utils/logger";
-import { createStoredSatoriGroupMessage } from "@/utils/message";
-import { sendAndRecordSatoriGroupReply } from "@/utils/reply";
+import { createStoredSatoriGroupMessage, sendAndRecordSatoriGroupReply } from "@/utils/message";
 
 let isCloseGroup = false;
 const config = getYuijuConfig();

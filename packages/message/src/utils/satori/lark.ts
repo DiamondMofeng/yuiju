@@ -1,5 +1,6 @@
 import { h, type Session, Universal } from "@satorijs/core";
 import type { Message as SatoriMessage } from "@satorijs/protocol";
+import { SUBJECT_NAME } from "@yuiju/utils";
 
 interface LarkRawMessage {
   message_id?: string;
@@ -39,6 +40,10 @@ interface LarkPostElement {
 }
 
 interface LarkBotWithInternal {
+  selfId?: string;
+  config?: {
+    appId?: string;
+  };
   getResourceUrl?(type: string, messageId: string, fileKey: string): string;
   internal?: {
     im?: {
@@ -50,31 +55,84 @@ interface LarkBotWithInternal {
 }
 
 export async function normalizeLarkSession(session: Session): Promise<Session> {
+  const userId = session.userId || session.event.user?.id;
+  if (session.guildId && userId) {
+    try {
+      const members = await session.bot.getGuildMemberList(session.guildId);
+      const member = members.data.find((item) => item.user?.id === userId);
+      const displayName =
+        member?.name?.trim() || member?.nick?.trim() || member?.user?.name?.trim();
+      if (displayName) {
+        session.event.user = {
+          ...session.event.user,
+          id: userId,
+          name: displayName,
+        };
+      }
+    } catch {
+      // Lark member display name is a best-effort normalization; raw session data is still usable.
+    }
+  }
+
   const quote = session.quote ?? session.event.message?.quote;
-  if (!quote || hasReadableMessageContent(quote)) {
+  if (!quote) {
     return session;
   }
 
-  const messageId = quote.id ?? quote.messageId;
-  if (!messageId) {
-    return session;
+  let normalizedQuote: SatoriMessage = quote;
+  if (!hasReadableMessageContent(quote)) {
+    const messageId = quote.id ?? quote.messageId;
+    if (!messageId) {
+      return session;
+    }
+
+    const bot = session.bot as unknown as LarkBotWithInternal;
+    const larkMessage = await bot.internal?.im?.message?.get(messageId).catch(() => null);
+    const rawMessage = larkMessage?.items?.[0];
+    if (!rawMessage) {
+      return session;
+    }
+
+    const decodedQuote = decodeLarkMessage(bot, rawMessage);
+    if (!hasReadableMessageContent(decodedQuote)) {
+      return session;
+    }
+
+    normalizedQuote = {
+      ...quote,
+      ...decodedQuote,
+    };
   }
 
-  const bot = session.bot as unknown as LarkBotWithInternal;
-  const larkMessage = await bot.internal?.im?.message?.get(messageId).catch(() => null);
-  const rawMessage = larkMessage?.items?.[0];
-  if (!rawMessage) {
-    return session;
+  const quoteUserId = normalizedQuote.user?.id || quote.user?.id;
+  let quoteUserName = normalizedQuote.user?.name?.trim() || quote.user?.name?.trim();
+  const selfIds = [
+    session.selfId,
+    session.bot.selfId,
+    (session.bot as LarkBotWithInternal).config?.appId,
+  ];
+  if (quoteUserId && selfIds.includes(quoteUserId)) {
+    quoteUserName = SUBJECT_NAME;
+  } else if (quoteUserId && session.guildId && !quoteUserName) {
+    try {
+      const members = await session.bot.getGuildMemberList(session.guildId);
+      const member = members.data.find((item) => item.user?.id === quoteUserId);
+      quoteUserName =
+        member?.name?.trim() || member?.nick?.trim() || member?.user?.name?.trim() || undefined;
+    } catch {
+      // Lark quote speaker display name is best-effort; keeping the user id is still useful.
+    }
   }
 
-  const decodedQuote = decodeLarkMessage(bot, rawMessage);
-  if (!hasReadableMessageContent(decodedQuote)) {
-    return session;
-  }
-
-  const normalizedQuote = {
-    ...quote,
-    ...decodedQuote,
+  normalizedQuote = {
+    ...normalizedQuote,
+    user: quoteUserId
+      ? {
+          ...normalizedQuote.user,
+          id: quoteUserId,
+          name: quoteUserName,
+        }
+      : normalizedQuote.user,
   };
   session.quote = normalizedQuote;
   if (session.event.message) {
