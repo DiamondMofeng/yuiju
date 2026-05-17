@@ -8,7 +8,7 @@ import { sendAndRecordPrivateReply } from "@/utils/reply";
 import { closeGroupMessage, openGroupMessage } from "./group-message";
 
 const config = getYuijuConfig();
-const whiteList = config.message.whiteList;
+const whiteList = config.message.onebot.whiteList;
 
 function groupMessageAction(action: string | null) {
   if (action === "/关闭") {

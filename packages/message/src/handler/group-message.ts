@@ -29,7 +29,7 @@ export async function groupMessageHandler(
     return;
   }
 
-  if (!config.message.groupWhiteList.includes(context.group_id)) {
+  if (!config.message.onebot.groupWhiteList.includes(context.group_id)) {
     return;
   }
 

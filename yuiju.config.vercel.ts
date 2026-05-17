@@ -54,14 +54,27 @@ const config = defineYuijuConfig({
     proactive: {
       groupTargetId: 0,
     },
-    napcat: {
+    onebot: {
       protocol: "ws",
-      host: "",
-      port: 0,
-      accessToken: "",
+      selfId: "",
+      endpoint: "",
+      token: "",
+      retryTimes: 6,
+      retryInterval: 5000,
+      retryLazy: 60000,
+      responseTimeout: 120000,
+      whiteList: [],
+      groupWhiteList: [],
     },
-    whiteList: [],
-    groupWhiteList: [],
+    lark: {
+      protocol: "ws",
+      endpoint: "https://open.feishu.cn/open-apis",
+      appId: "",
+      appSecret: "",
+      retryTimes: 6,
+      retryInterval: 5000,
+      retryLazy: 60000,
+    },
     stickers: {},
   },
 });

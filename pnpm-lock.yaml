@@ -111,9 +111,9 @@ importers:
       '@larksuiteoapi/node-sdk':
         specifier: ^1.64.0
         version: 1.64.0
-      '@satorijs/adapter-onebot':
-        specifier: ^6.0.2
-        version: 6.0.2(@satorijs/satori@3.7.0)
+      '@satorijs/adapter-lark':
+        specifier: ^3.12.5
+        version: 3.12.5(@satorijs/core@4.6.0(cordis@3.18.1))
       '@satorijs/core':
         specifier: ^4.6.0
         version: 4.6.0(cordis@3.18.1)
@@ -123,12 +123,24 @@ importers:
       '@satorijs/protocol':
         specifier: ^1.7.0
         version: 1.7.0
+      '@yuiju/satorijs-adapter-onebot':
+        specifier: workspace:*
+        version: link:../satorijs-adapter-onebot
       '@yuiju/source':
         specifier: workspace:*
         version: link:../source
       '@yuiju/utils':
         specifier: workspace:*
         version: link:../utils
+
+  packages/satorijs-adapter-onebot:
+    dependencies:
+      '@satorijs/core':
+        specifier: ^4.6.0
+        version: 4.6.0(cordis@3.18.1)
+      qface:
+        specifier: ^1.4.1
+        version: 1.4.1
 
   packages/source:
     dependencies:
@@ -433,11 +445,6 @@ packages:
     resolution: {integrity: sha512-UcyZRXAL86YLAEEta+fxJM1CcDanJvoIMD9ywCyP2AZJuib68UynENGTFo4mYkeg+8WMXrlA/aNNwENMiLUlXA==}
     peerDependencies:
       '@cordisjs/core': ^3.17.1
-
-  '@cordisjs/plugin-http@0.4.2':
-    resolution: {integrity: sha512-6HQlI0dLkHbKCH+qZUFH+ehin+1wxy8oR+C2Wx388L7lbFbQNLw21aaOknYuZX/8hKTRejTopjnCB705FGqHKQ==}
-    peerDependencies:
-      cordis: ^3.14.0
 
   '@cordisjs/plugin-http@0.6.3':
     resolution: {integrity: sha512-kmw4G1t39ZZzFGpBKUNuTv2aefEUtxa1e4qu4+bTrM5Z8uYHTRzPpyJfkj9zuZwopP/Vz271OUr2UfDN5lrJKQ==}
@@ -1873,14 +1880,10 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@satorijs/adapter-onebot@6.0.2':
-    resolution: {integrity: sha512-rECvmghlzkyhu6o+Sy3NVDQ59az3M0DxxYzngmEhTiyoia81fP71xGNURBw+Z6ALBNpUEsh4IKHg1Gq38jq5mQ==}
-    deprecated: official support for onebot has been dropped
+  '@satorijs/adapter-lark@3.12.5':
+    resolution: {integrity: sha512-nTgJfcDQtBjTsMwVkreCmTtaU2BaZWIwLds788fRKItslZadK6haTAo7pZcjEO7snRL0/Ug4dFzCFvudX9Zj7Q==}
     peerDependencies:
-      '@satorijs/satori': ^3.0.0-rc.0
-
-  '@satorijs/core@3.7.0':
-    resolution: {integrity: sha512-aNDt0E0DEW/jqQuQGKzW68w5uu/ZUkjgr+VyOrctOdfd4+HCTgnsFYDjJmKfN4GzahaxuFzm19KYMCD6tHdNVA==}
+      '@satorijs/core': ^4.6.0
 
   '@satorijs/core@4.6.0':
     resolution: {integrity: sha512-qckF668QfV3ifGLlyvmfyrghD7kTotgEbo3BBQsaOa4QTccBbvUhIayy2GgBQh1/scEkRuhTFlOgIdmCX8i2DQ==}
@@ -1892,9 +1895,6 @@ packages:
 
   '@satorijs/protocol@1.7.0':
     resolution: {integrity: sha512-ODSBVzdn7s9tw3XGFGYZ1MnjbA1jctwSleJTsyk/lAjyNziOFKNP5nIBAcw0r547dvXBweZNudnCqod6Ts+hqw==}
-
-  '@satorijs/satori@3.7.0':
-    resolution: {integrity: sha512-QcgIw2DyO2eu0ozSyBd2kGZQ0y61xwzrDRX3VdtQPksgU0/ycjunfVuujZ0rz8itbh6GxdP5J5F+5wHrhoR4NA==}
 
   '@shikijs/core@2.5.0':
     resolution: {integrity: sha512-uu/8RExTKtavlpH7XqnVYBrfBkUc20ngXiX9NSrBhOVZYv/7XQRKUyhtkeflY5QsxC0GbJThCerruZfsUaSldg==}
@@ -3301,6 +3301,10 @@ packages:
     resolution: {integrity: sha512-dvpCIeLPbXZS/Ete7yLaO7RenOdken2NHKykBXbsaGxZT0UTltcarBciw+A78SRQs9iMAAVpsYA+l8b1hTePIA==}
     engines: {node: '>=12.0.0'}
 
+  protobufjs@8.3.0:
+    resolution: {integrity: sha512-JpJpFaR7yKNb6WqKvJJ1MLbiuIQWQnbUUb06nDtf2/i8YWYYLEfP6xf9BwSJoJQg1wAy61EQB8dssQg64oX4aA==}
+    engines: {node: '>=12.0.0'}
+
   proxy-agent@6.4.0:
     resolution: {integrity: sha512-u0piLU+nCOHMgGjRbimiXmA9kM/L9EHh3zL81xCdp7m+Y2pHIsnmbdDoEDoAz5geaonNR6q6+yOPQs6n4T6sBQ==}
     engines: {node: '>= 14'}
@@ -4265,17 +4269,6 @@ snapshots:
       '@cordisjs/core': 3.18.1
       cosmokit: 1.8.1
       reggol: 1.7.1
-
-  '@cordisjs/plugin-http@0.4.2(cordis@3.18.1)':
-    dependencies:
-      cordis: 3.18.1
-      cosmokit: 1.8.1
-      file-type: 16.5.4
-      mime-db: 1.52.0
-      ws: 8.20.1
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
 
   '@cordisjs/plugin-http@0.6.3(cordis@3.18.1)':
     dependencies:
@@ -5562,22 +5555,10 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.53.3':
     optional: true
 
-  '@satorijs/adapter-onebot@6.0.2(@satorijs/satori@3.7.0)':
+  '@satorijs/adapter-lark@3.12.5(@satorijs/core@4.6.0(cordis@3.18.1))':
     dependencies:
-      '@satorijs/satori': 3.7.0
-      qface: 1.4.1
-
-  '@satorijs/core@3.7.0':
-    dependencies:
-      '@cordisjs/plugin-http': 0.4.2(cordis@3.18.1)
-      '@satorijs/element': 3.2.0
-      '@satorijs/protocol': 1.7.0
-      cordis: 3.18.1
-      cosmokit: 1.8.1
-      ws: 8.20.1
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
+      '@satorijs/core': 4.6.0(cordis@3.18.1)
+      protobufjs: 8.3.0
 
   '@satorijs/core@4.6.0(cordis@3.18.1)':
     dependencies:
@@ -5599,14 +5580,6 @@ snapshots:
     dependencies:
       '@satorijs/element': 3.2.0
       cosmokit: 1.8.1
-
-  '@satorijs/satori@3.7.0':
-    dependencies:
-      '@satorijs/core': 3.7.0
-      cosmokit: 1.8.1
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
 
   '@shikijs/core@2.5.0':
     dependencies:
@@ -7052,6 +7025,10 @@ snapshots:
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.1
       '@types/node': 25.4.0
+      long: 5.3.2
+
+  protobufjs@8.3.0:
+    dependencies:
       long: 5.3.2
 
   proxy-agent@6.4.0:

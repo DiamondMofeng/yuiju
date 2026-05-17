@@ -9,7 +9,18 @@ import { logger } from "./utils/logger";
 
 const config = getYuijuConfig();
 
-const napcat = new NCWebsocket(config.message.napcat);
+const onebotEndpoint = new URL(config.message.onebot.endpoint);
+const napcat = new NCWebsocket({
+  protocol: config.message.onebot.protocol,
+  host: onebotEndpoint.hostname,
+  port: Number(onebotEndpoint.port),
+  accessToken: config.message.onebot.token,
+  reconnection: {
+    enable: true,
+    attempts: config.message.onebot.retryTimes,
+    delay: config.message.onebot.retryInterval,
+  },
+});
 
 napcat.on("message.private", (context) => privateMessageHandler(context, napcat));
 

@@ -1,3 +1,3 @@
-import { main } from "./memory-test";
+import { main } from "./satori";
 
 main();

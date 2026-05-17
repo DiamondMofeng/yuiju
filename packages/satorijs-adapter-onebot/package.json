@@ -1,0 +1,37 @@
+{
+  "name": "@yuiju/satorijs-adapter-onebot",
+  "description": "OneBot Adapter for Satorijs",
+  "version": "6.0.2",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "author": "Shigma <shigma10826@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/satorijs/satori.git",
+    "directory": "adapters/onebot"
+  },
+  "bugs": {
+    "url": "https://github.com/satorijs/satori/issues"
+  },
+  "homepage": "https://koishi.chat/plugins/adapter/onebot.html",
+  "keywords": [
+    "bot",
+    "onebot",
+    "chatbot",
+    "satori",
+    "im",
+    "chat"
+  ],
+  "dependencies": {
+    "@satorijs/core": "^4.6.0",
+    "qface": "^1.4.1"
+  }
+}

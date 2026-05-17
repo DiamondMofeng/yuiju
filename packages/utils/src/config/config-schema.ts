@@ -1,27 +1,10 @@
-import type { NCWebsocketOptions } from "node-napcat-ts";
-
 /**
- * Napcat 重连配置。
- *
- * 说明：
- * - 这里抽象为项目内部配置类型，避免根配置文件直接依赖第三方 SDK 类型；
- * - 字段保持与 node-napcat-ts 常用配置语义一致，message 包在运行时直接透传即可。
+ * 消息平台 WebSocket 重连配置。
  */
-export interface YuijuNapcatReconnectionConfig {
-  enable: boolean;
-  attempts: number;
-  delay: number;
-}
-
-/**
- * Napcat WebSocket 连接配置。
- */
-export interface YuijuNapcatConfig {
-  protocol: "ws" | "wss";
-  host: string;
-  port: number;
-  accessToken: string;
-  reconnection?: YuijuNapcatReconnectionConfig;
+export interface YuijuMessageWebSocketReconnectConfig {
+  retryTimes: number;
+  retryInterval: number;
+  retryLazy: number;
 }
 
 /**
@@ -30,6 +13,29 @@ export interface YuijuNapcatConfig {
 export interface YuijuMessageInternalApiConfig {
   host: string;
   port: number;
+}
+
+/**
+ * OneBot 消息平台配置。
+ */
+export interface YuijuOneBotConfig extends YuijuMessageWebSocketReconnectConfig {
+  protocol: "ws";
+  selfId: string;
+  endpoint: string;
+  token: string;
+  responseTimeout: number;
+  whiteList: number[];
+  groupWhiteList: number[];
+}
+
+/**
+ * Lark / 飞书消息平台配置。
+ */
+export interface YuijuLarkConfig extends YuijuMessageWebSocketReconnectConfig {
+  protocol: "ws";
+  endpoint: string;
+  appId: string;
+  appSecret: string;
 }
 
 /**
@@ -57,13 +63,12 @@ export type YuijuStickerMap = Record<string, YuijuStickerConfig>;
  * 消息服务相关配置。
  */
 export interface YuijuMessageConfig {
-  napcat: NCWebsocketOptions;
+  onebot: YuijuOneBotConfig;
+  lark: YuijuLarkConfig;
   internalApi: YuijuMessageInternalApiConfig;
   proactive: {
     groupTargetId: number;
   };
-  whiteList: number[];
-  groupWhiteList: number[];
   stickers: YuijuStickerMap;
 }
 

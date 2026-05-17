@@ -52,19 +52,27 @@ const config = defineYuijuConfig({
     proactive: {
       groupTargetId: 838986741,
     },
-    napcat: {
+    onebot: {
       protocol: "ws",
-      host: "localhost",
-      port: 3001,
-      accessToken: "xxx",
-      reconnection: {
-        enable: true,
-        attempts: 10,
-        delay: 5000,
-      },
+      selfId: "xxx",
+      endpoint: "ws://localhost:3001",
+      token: "xxx",
+      retryTimes: 6,
+      retryInterval: 5000,
+      retryLazy: 60000,
+      responseTimeout: 120000,
+      whiteList: [1918418506],
+      groupWhiteList: [838986741, 1083608109],
     },
-    whiteList: [1918418506],
-    groupWhiteList: [838986741, 1083608109],
+    lark: {
+      protocol: "ws",
+      endpoint: "https://open.feishu.cn/open-apis",
+      appId: "xxx",
+      appSecret: "xxx",
+      retryTimes: 6,
+      retryInterval: 5000,
+      retryLazy: 60000,
+    },
     stickers: {
       crying: {
         uri: "packages/source/picture/crying.png",
