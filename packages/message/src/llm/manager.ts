@@ -175,8 +175,6 @@ export class LLMManager {
 
     const { historyJson, summary } = await this.groupSession.getHistoryJson(sessionKey);
 
-    console.log(11, historyJson);
-
     const systemPrompt = [
       getCharacterCardPrompt(),
       stickerState.getPromptSection(),
