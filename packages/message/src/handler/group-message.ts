@@ -1,13 +1,9 @@
+import type { Session } from "@satorijs/core";
 import { ActionId, getYuijuConfig, initCharacterStateData } from "@yuiju/utils";
-import type { AllHandlers, NCWebsocket } from "node-napcat-ts";
 import { llmManager } from "@/llm/manager";
 import { logger } from "@/utils/logger";
-import {
-  createStoredGroupMessage,
-  getGroupDisplayName,
-  isGroupMessageDirectedToBot,
-} from "@/utils/message";
-import { sendAndRecordGroupReply } from "@/utils/reply";
+import { createStoredSatoriGroupMessage } from "@/utils/message";
+import { sendAndRecordSatoriGroupReply } from "@/utils/reply";
 
 let isCloseGroup = false;
 const config = getYuijuConfig();
@@ -20,59 +16,67 @@ export const openGroupMessage = () => {
   isCloseGroup = false;
 };
 
-export async function groupMessageHandler(
-  context: AllHandlers["message.group"],
-  napcat: NCWebsocket,
-) {
-  // TODO: 临时逻辑，后续需要抽离
+export async function groupMessageHandler(session: Session) {
   if (isCloseGroup) {
     return;
   }
 
-  if (!config.message.onebot.groupWhiteList.includes(context.group_id)) {
+  const sessionGroupId = session.guildId ?? session.channelId;
+  if (!sessionGroupId) {
     return;
   }
 
-  const { quick_action: _quickAction, ...storedContext } = context;
-  if (!storedContext.message.length) {
+  if (session.platform === "onebot") {
+    const groupId = Number(sessionGroupId);
+    if (!Number.isInteger(groupId) || !config.message.onebot.groupWhiteList.includes(groupId)) {
+      return;
+    }
+  } else if (session.platform === "lark") {
+    if (!config.message.lark.groupWhiteList.includes(sessionGroupId)) {
+      return;
+    }
+  } else {
     return;
   }
-  const storedMessage = await createStoredGroupMessage(storedContext, napcat);
-  const groupName = getGroupDisplayName(storedMessage);
+
+  const storedMessage = await createStoredSatoriGroupMessage(session);
+  if (!storedMessage) {
+    return;
+  }
+  if (storedMessage.sender.isSelf) {
+    return;
+  }
 
   logger.info("[message.receive.group] 收到群消息", {
-    groupName,
-    sender: storedMessage.sender.card || storedMessage.sender.nickname || storedMessage.user_id,
-    rawMessage: storedMessage.raw_message,
+    platform: storedMessage.platform,
+    groupName: storedMessage.sessionLabel,
+    sender: storedMessage.sender.displayName,
+    messageId: storedMessage.messageId,
+    content: storedMessage.content,
   });
 
-  llmManager.recordGroupMessage(storedMessage, groupName);
+  llmManager.recordGroupMessage(storedMessage);
 
-  // 睡觉时，不能发送消息
   const characterStateData = await initCharacterStateData();
   if (characterStateData.action === ActionId.Sleep) {
     return;
   }
 
   try {
-    const messageCheckResult = await isGroupMessageDirectedToBot(storedMessage, napcat);
-    const groupChatResult = await llmManager.chatInGroup(
-      storedMessage,
-      messageCheckResult.isDriectedToBot ? messageCheckResult.type : undefined,
-    );
+    const groupChatResult = await llmManager.chatInGroup(storedMessage);
     if (groupChatResult.status === "cancelled") {
       logger.info("[message.reply.group] 群聊回复生成已取消，不发送消息", {
-        groupId: context.group_id,
-        groupName,
-        requestId: storedMessage.message_id,
+        sessionId: storedMessage.sessionId,
+        groupName: storedMessage.sessionLabel,
+        requestId: storedMessage.messageId,
       });
       return;
     }
 
-    if (!llmManager.isLatestGroupChatRequest(context.group_id, groupChatResult.requestId)) {
+    if (!llmManager.isLatestGroupChatRequest(storedMessage.sessionId, groupChatResult.requestId)) {
       logger.info("[message.reply.group] 群聊回复结果已过期，不发送消息", {
-        groupId: context.group_id,
-        groupName,
+        sessionId: storedMessage.sessionId,
+        groupName: storedMessage.sessionLabel,
         requestId: groupChatResult.requestId,
       });
       return;
@@ -80,8 +84,8 @@ export async function groupMessageHandler(
 
     if (!groupChatResult.shouldReply) {
       logger.info("[message.reply.group] 不回复", {
-        groupId: context.group_id,
-        groupName,
+        sessionId: storedMessage.sessionId,
+        groupName: storedMessage.sessionLabel,
         requestId: groupChatResult.requestId,
         reason: groupChatResult.noReplyReason || "未提供原因",
       });
@@ -93,13 +97,10 @@ export async function groupMessageHandler(
       return;
     }
 
-    await sendAndRecordGroupReply({
-      napcat,
-      groupId: context.group_id,
-      sourceMessageId: context.message_id,
+    await sendAndRecordSatoriGroupReply({
+      session,
+      sourceMessage: storedMessage,
       reply,
-      sessionLabel: groupName,
-      shouldReplyToSourceMessage: messageCheckResult.isDriectedToBot,
     });
   } catch (error) {
     logger.error("[message.reply.group] 处理群消息失败", error);

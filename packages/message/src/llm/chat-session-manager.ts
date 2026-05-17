@@ -10,10 +10,11 @@ import { generateText } from "ai";
 import dayjs from "dayjs";
 import {
   getProtocolMessageSenderName,
+  getProtocolMessageTimestampMs,
   type HistoryJsonItem,
-  projectHistoryMessageContent,
-  type StoredGroupMessage,
-  type StoredPrivateMessage,
+  projectStoredMessageContent,
+  type StoredGroupChatMessage,
+  type StoredPrivateChatMessage,
   type StoredProtocolMessage,
 } from "@/utils/message";
 import { buildConversationEpisode } from "../memory/episode-builder";
@@ -225,7 +226,7 @@ export class BaseChatSessionManager<
    * - 达到条数阈值时立即封口刷新，避免活跃会话里的旧消息长期脱离摘要。
    */
   private appendSummaryChunkMessage(input: ChatMessageInput<TMessage>) {
-    const messageTimeMs = input.message.time * 1000;
+    const messageTimeMs = getProtocolMessageTimestampMs(input.message);
     const currentState = this.summaryChunkBySessionId.get(input.sessionId);
 
     if (!currentState) {
@@ -267,7 +268,7 @@ export class BaseChatSessionManager<
    * - 摘要刷新不会影响 episode 的窗口边界。
    */
   private appendEpisodeMessage(input: ChatMessageInput<TMessage>) {
-    const messageTimeMs = input.message.time * 1000;
+    const messageTimeMs = getProtocolMessageTimestampMs(input.message);
     const currentState = this.episodeStateBySessionId.get(input.sessionId);
 
     if (!currentState) {
@@ -441,13 +442,13 @@ export class BaseChatSessionManager<
   private async writePersonMemoryUpdatesForChatWindow(state: EpisodeWindowState<TMessage>) {
     if (this.sceneLabel === "private") {
       await writePersonMemoryUpdatesForPrivateChatWindow(
-        state as EpisodeWindowState<StoredPrivateMessage>,
+        state as EpisodeWindowState<StoredPrivateChatMessage>,
       );
       return;
     }
 
     await writePersonMemoryUpdatesForGroupChatWindow(
-      state as EpisodeWindowState<StoredGroupMessage>,
+      state as EpisodeWindowState<StoredGroupChatMessage>,
     );
   }
 
@@ -461,14 +462,14 @@ export class BaseChatSessionManager<
   private buildHistoryItems(messages: TMessage[]): HistoryJsonItem[] {
     return messages.map((message) => ({
       speaker: getProtocolMessageSenderName(message),
-      time: getTimeWithWeekday(dayjs.unix(message.time)),
-      content: projectHistoryMessageContent(message.message),
+      time: getTimeWithWeekday(dayjs(getProtocolMessageTimestampMs(message))),
+      content: projectStoredMessageContent(message),
     }));
   }
 
   private trimConversation(list: TMessage[]): TMessage[] {
     const cutoffMs = Date.now() - this.conversationTtlMs;
-    const filtered = list.filter((message) => message.time * 1000 >= cutoffMs);
+    const filtered = list.filter((message) => getProtocolMessageTimestampMs(message) >= cutoffMs);
 
     return filtered.length > this.conversationLimit
       ? filtered.slice(filtered.length - this.conversationLimit)
@@ -483,7 +484,7 @@ export class BaseChatSessionManager<
  * - 作为群聊场景的轻量适配层，复用通用会话内核；
  * - 保留独立类名，避免上层群聊语义被通用实现抹平。
  */
-export class GroupChatSessionManager extends BaseChatSessionManager<StoredGroupMessage> {
+export class GroupChatSessionManager extends BaseChatSessionManager<StoredGroupChatMessage> {
   constructor(options: ChatSessionManagerOptions) {
     super({
       options,
@@ -499,7 +500,7 @@ export class GroupChatSessionManager extends BaseChatSessionManager<StoredGroupM
  * - 作为私聊场景的轻量适配层，复用通用会话内核；
  * - 保留独立类名，便于后续私聊策略单独分叉。
  */
-export class PrivateChatSessionManager extends BaseChatSessionManager<StoredPrivateMessage> {
+export class PrivateChatSessionManager extends BaseChatSessionManager<StoredPrivateChatMessage> {
   constructor(options: ChatSessionManagerOptions) {
     super({
       options,

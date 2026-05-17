@@ -36,6 +36,8 @@ export interface YuijuLarkConfig extends YuijuMessageWebSocketReconnectConfig {
   endpoint: string;
   appId: string;
   appSecret: string;
+  whiteList: string[];
+  groupWhiteList: string[];
 }
 
 /**

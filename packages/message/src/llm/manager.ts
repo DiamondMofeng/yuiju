@@ -11,6 +11,7 @@ import {
   getPersonMemoryTool,
   listPersonMemoriesTool,
   messageHistorySchemaPrompt,
+  NICKNAME,
   queryStateTool,
   queryStaticGuideTool,
   todayEventSearchTool,
@@ -21,9 +22,11 @@ import { stickerState } from "@/state/sticker";
 import { logger } from "@/utils/logger";
 import {
   getGroupDisplayName,
+  getProtocolMessageId,
   getProtocolMessageSenderName,
-  type StoredGroupMessage,
-  type StoredPrivateMessage,
+  isStoredSatoriMessage,
+  type StoredGroupChatMessage,
+  type StoredPrivateChatMessage,
 } from "@/utils/message";
 import {
   type AbstractChatSessionManager,
@@ -42,13 +45,13 @@ type ActiveGroupChatTask = {
    * - 因此在生成完成和真正发送回复前，都要再次校验 requestId 是否仍然是该群最新值；
    * - 只要 requestId 已经过期，就把这次结果视为失效，禁止继续发送消息。
    */
-  requestId: number;
+  requestId: string;
 };
 
 export type GroupChatResult =
   | {
       status: "completed";
-      requestId: number;
+      requestId: string;
       shouldReply: boolean;
       reply: string;
       noReplyReason: string;
@@ -64,12 +67,12 @@ export type PrivateChatResult = {
 };
 
 export class LLMManager {
-  private privateSession: AbstractChatSessionManager<StoredPrivateMessage>;
-  private groupSession: AbstractChatSessionManager<StoredGroupMessage>;
+  private privateSession: AbstractChatSessionManager<StoredPrivateChatMessage>;
+  private groupSession: AbstractChatSessionManager<StoredGroupChatMessage>;
   /**
    * 记录每个群当前正在执行的回复生成任务，用于在同群新消息到来时取消旧请求。
    */
-  private activeGroupChatTaskByGroupId = new Map<number, ActiveGroupChatTask>();
+  private activeGroupChatTaskBySessionId = new Map<string, ActiveGroupChatTask>();
   /**
    * 记录每个群当前“最新那条触发回复的消息 id”。
    *
@@ -77,7 +80,7 @@ export class LLMManager {
    * - 这里保存的是最新请求对应的 `message_id`，不是独立生成的序号；
    * - 生成完成后和发送回复前都会再次比对它，避免旧请求在竞态下误发消息。
    */
-  private latestGroupChatRequestIdByGroupId = new Map<number, number>();
+  private latestGroupChatRequestIdBySessionId = new Map<string, string>();
 
   constructor() {
     this.privateSession = new PrivateChatSessionManager({
@@ -101,9 +104,9 @@ export class LLMManager {
   /**
    * 将群原始消息写入群会话历史，保证群聊模型拿到稳定上下文。
    */
-  public recordGroupMessage(message: StoredGroupMessage, sessionLabel?: string) {
+  public recordGroupMessage(message: StoredGroupChatMessage, sessionLabel?: string) {
     this.groupSession.recordMessage({
-      sessionId: this.buildGroupSessionKey(message.group_id),
+      sessionId: this.buildGroupSessionKey(message),
       sessionLabel: sessionLabel ?? getGroupDisplayName(message),
       message,
     });
@@ -112,9 +115,9 @@ export class LLMManager {
   /**
    * 将私聊原始消息写入私聊会话历史，保证回复模型与真实会话事实源保持一致。
    */
-  public recordPrivateMessage(message: StoredPrivateMessage, sessionLabel?: string) {
+  public recordPrivateMessage(message: StoredPrivateChatMessage, sessionLabel?: string) {
     this.privateSession.recordMessage({
-      sessionId: this.buildPrivateSessionKey(message.user_id),
+      sessionId: this.buildPrivateSessionKey(message),
       sessionLabel: sessionLabel ?? getProtocolMessageSenderName(message),
       message,
     });
@@ -127,32 +130,36 @@ export class LLMManager {
     groupId: number;
     limit?: number;
   }): Promise<SessionHistoryContext> {
-    return this.groupSession.getHistoryJson(this.buildGroupSessionKey(input.groupId), input.limit);
+    return this.groupSession.getHistoryJson(`group:${input.groupId}`, input.limit);
   }
 
-  private buildPrivateSessionKey(userId: number): string {
-    return `private:${userId}`;
+  private buildPrivateSessionKey(message: StoredPrivateChatMessage): string {
+    if (isStoredSatoriMessage(message)) {
+      return message.sessionId;
+    }
+
+    return `private:${message.user_id}`;
   }
 
-  private buildGroupSessionKey(groupId: number): string {
-    return `group:${groupId}`;
+  private buildGroupSessionKey(message: StoredGroupChatMessage): string {
+    if (isStoredSatoriMessage(message)) {
+      return message.sessionId;
+    }
+
+    return `group:${message.group_id}`;
   }
 
   /**
    * 判断是否需要回复群消息，并在需要时生成自然语言回复。
    */
-  public async chatInGroup(
-    message: StoredGroupMessage,
-    directedType?: "at" | "reply",
-  ): Promise<GroupChatResult> {
-    const groupId = message.group_id;
-    const sessionKey = this.buildGroupSessionKey(groupId);
-    const requestId = message.message_id;
-    const previousTask = this.activeGroupChatTaskByGroupId.get(groupId);
+  public async chatInGroup(message: StoredGroupChatMessage): Promise<GroupChatResult> {
+    const sessionKey = this.buildGroupSessionKey(message);
+    const requestId = getProtocolMessageId(message);
+    const previousTask = this.activeGroupChatTaskBySessionId.get(sessionKey);
     if (previousTask) {
       logger.info("[message.llm.group] 新消息到来，取消同群上一条回复生成", {
-        groupId,
         groupName: getGroupDisplayName(message),
+        sessionId: sessionKey,
         previousRequestId: previousTask.requestId,
         nextRequestId: requestId,
       });
@@ -160,13 +167,14 @@ export class LLMManager {
     }
 
     const controller = new AbortController();
-    this.latestGroupChatRequestIdByGroupId.set(groupId, requestId);
-    this.activeGroupChatTaskByGroupId.set(groupId, {
+    this.latestGroupChatRequestIdBySessionId.set(sessionKey, requestId);
+    this.activeGroupChatTaskBySessionId.set(sessionKey, {
       controller,
       requestId,
     });
 
     const { historyJson, summary } = await this.groupSession.getHistoryJson(sessionKey);
+    console.log(111, historyJson);
 
     const systemPrompt = [
       getCharacterCardPrompt(),
@@ -175,7 +183,7 @@ export class LLMManager {
       chatReplyRulesPrompt,
       buildChatPlanProposalPrompt(),
       "## 当前聊天场景",
-      `你现在正在 QQ 群「${getGroupDisplayName(message)}」`,
+      `你现在正在群聊「${getGroupDisplayName(message)}」中以「${NICKNAME}」的身份聊天。`,
     ].join("\n\n");
 
     try {
@@ -193,7 +201,6 @@ export class LLMManager {
             content: buildMessageHistoryUserPrompt({
               summary,
               historyJson,
-              latestMessageDirectedType: directedType,
             }),
           },
         ],
@@ -224,7 +231,7 @@ export class LLMManager {
         }),
       });
 
-      if (!this.isLatestGroupChatRequest(groupId, requestId)) {
+      if (!this.isLatestGroupChatRequest(sessionKey, requestId)) {
         return { status: "cancelled" };
       }
 
@@ -248,19 +255,19 @@ export class LLMManager {
       }
       throw error;
     } finally {
-      const activeTask = this.activeGroupChatTaskByGroupId.get(groupId);
+      const activeTask = this.activeGroupChatTaskBySessionId.get(sessionKey);
       if (activeTask?.requestId === requestId) {
-        this.activeGroupChatTaskByGroupId.delete(groupId);
+        this.activeGroupChatTaskBySessionId.delete(sessionKey);
       }
     }
   }
 
-  public isLatestGroupChatRequest(groupId: number, requestId: number): boolean {
-    return this.latestGroupChatRequestIdByGroupId.get(groupId) === requestId;
+  public isLatestGroupChatRequest(sessionId: string, requestId: string): boolean {
+    return this.latestGroupChatRequestIdBySessionId.get(sessionId) === requestId;
   }
 
-  public async chatWithLLM(message: StoredPrivateMessage) {
-    const sessionId = this.buildPrivateSessionKey(message.user_id);
+  public async chatWithLLM(message: StoredPrivateChatMessage) {
+    const sessionId = this.buildPrivateSessionKey(message);
     const { historyJson, summary } = await this.privateSession.getHistoryJson(sessionId);
     const sessionLabel = getProtocolMessageSenderName(message);
     const systemPrompt = [

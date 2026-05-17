@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { getYuijuProjectRoot, SUBJECT_NAME } from "@yuiju/utils";
 import { llmManager } from "@/llm/manager";
 import { stickerState } from "@/state/sticker";
-import { getProtocolMessageSenderName, type StoredGroupMessage } from "@/utils/message";
+import type { StoredGroupMessage } from "@/utils/message";
 
 interface GroupHistoryDemoFile {
   sessionLabel: string;
@@ -42,7 +42,7 @@ export async function main() {
     throw new Error("无法读取最后一条群消息。");
   }
 
-  const result = await llmManager.chatInGroup(latestMessage, "at");
+  const result = await llmManager.chatInGroup(latestMessage);
 
   console.log(JSON.stringify({ result }, null, 2));
 }

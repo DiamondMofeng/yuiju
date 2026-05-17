@@ -1,16 +1,14 @@
-import "@yuiju/utils/env";
+import type { Session } from "@satorijs/core";
 import { getYuijuConfig } from "@yuiju/utils";
-import type { AllHandlers, NCWebsocket } from "node-napcat-ts";
 import { llmManager } from "@/llm/manager";
 import { logger } from "@/utils/logger";
-import { createStoredPrivateMessage, getProtocolMessageSenderName } from "@/utils/message";
-import { sendAndRecordPrivateReply } from "@/utils/reply";
+import { createStoredSatoriPrivateMessage, getProtocolMessageSenderName } from "@/utils/message";
+import { sendAndRecordSatoriPrivateReply } from "@/utils/reply";
 import { closeGroupMessage, openGroupMessage } from "./group-message";
 
 const config = getYuijuConfig();
-const whiteList = config.message.onebot.whiteList;
 
-function groupMessageAction(action: string | null) {
+function groupMessageAction(action?: string) {
   if (action === "/关闭") {
     closeGroupMessage();
     return true;
@@ -22,37 +20,50 @@ function groupMessageAction(action: string | null) {
   return false;
 }
 
-export async function privateMessageHandler(
-  context: AllHandlers["message.private"],
-  napcat: NCWebsocket,
-) {
-  let receiveMessage: string | null = null;
-  for (const item of context.message) {
-    if (item.type === "text") {
-      receiveMessage = item.data.text;
+export async function privateMessageHandler(session: Session) {
+  if (!session.isDirect) {
+    return;
+  }
+
+  if (groupMessageAction(session.content)) {
+    return;
+  }
+
+  if (!session.content) {
+    return;
+  }
+
+  const userId = session.userId || session.event.user?.id;
+  if (!userId) {
+    return;
+  }
+
+  if (session.platform === "onebot") {
+    const qq = Number(userId);
+    if (!Number.isInteger(qq) || !config.message.onebot.whiteList.includes(qq)) {
+      return;
     }
-  }
-
-  if (groupMessageAction(receiveMessage)) {
-    return;
-  }
-
-  if (!receiveMessage) {
-    return;
-  }
-
-  if (!whiteList.includes(context.sender.user_id) && !context.sender.nickname) {
+  } else if (session.platform === "lark") {
+    if (!config.message.lark.whiteList.includes(userId)) {
+      return;
+    }
+  } else {
     return;
   }
 
   try {
-    const { quick_action: _quickAction, ...rawMessage } = context;
-    const storedMessage = await createStoredPrivateMessage(rawMessage, napcat);
+    const storedMessage = await createStoredSatoriPrivateMessage(session);
+    if (!storedMessage || storedMessage.sender.isSelf) {
+      return;
+    }
+
     const sessionLabel = getProtocolMessageSenderName(storedMessage);
 
     logger.info("[message.receive.private] 收到私聊消息", {
+      platform: storedMessage.platform,
       sender: sessionLabel,
-      rawMessage: storedMessage.raw_message,
+      messageId: storedMessage.messageId,
+      content: storedMessage.content,
     });
 
     llmManager.recordPrivateMessage(storedMessage, sessionLabel);
@@ -60,7 +71,7 @@ export async function privateMessageHandler(
 
     if (!chatResult.shouldReply) {
       logger.info("[message.reply.private] 不回复", {
-        userId: context.user_id,
+        userId,
         sessionLabel,
         reason: chatResult.noReplyReason || "未提供原因",
       });
@@ -72,11 +83,10 @@ export async function privateMessageHandler(
       return;
     }
 
-    await sendAndRecordPrivateReply({
-      napcat,
-      userId: context.user_id,
+    await sendAndRecordSatoriPrivateReply({
+      session,
+      sourceMessage: storedMessage,
       reply,
-      sessionLabel,
     });
   } catch (error) {
     logger.error("[message.reply.private] 处理私聊消息失败", error);

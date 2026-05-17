@@ -8,9 +8,13 @@ const config = getYuijuConfig();
 const ctx = new Context({});
 ctx.plugin(HTTP);
 
-new LarkBot(ctx, config.message.lark);
+new LarkBot(ctx, {
+  ...config.message.lark,
+});
 
-new OneBotBot(ctx, config.message.onebot);
+new OneBotBot(ctx, {
+  ...config.message.onebot,
+});
 
 ctx.on("message", async (session) => {
   let nickname: string | undefined;

@@ -1,7 +1,12 @@
 import type { MemoryEpisode } from "@yuiju/utils";
 import { getTimeWithWeekday, SUBJECT_NAME } from "@yuiju/utils";
 import dayjs from "dayjs";
-import { getProtocolMessageSenderName, type StoredProtocolMessage } from "@/utils/message";
+import {
+  getProtocolMessageSenderName,
+  getProtocolMessageTimestampMs,
+  projectStoredMessageContent,
+  type StoredProtocolMessage,
+} from "@/utils/message";
 
 export interface ChatWindowMessageItem {
   speaker_name: string;
@@ -43,8 +48,8 @@ export function buildConversationEpisode(input: {
   const windowEndText = getTimeWithWeekday(dayjs(windowEnd));
   const projectedMessages = input.state.messages.map((message) => ({
     speaker_name: getProtocolMessageSenderName(message),
-    content: JSON.stringify(message.message),
-    timestamp: getTimeWithWeekday(dayjs.unix(message.time)),
+    content: JSON.stringify(projectStoredMessageContent(message)),
+    timestamp: getTimeWithWeekday(dayjs(getProtocolMessageTimestampMs(message))),
   }));
   const messageCount = projectedMessages.length;
 

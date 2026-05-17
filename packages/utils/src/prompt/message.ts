@@ -3,7 +3,6 @@ import { NICKNAME, SUBJECT_NAME } from "../constants";
 export interface MessageHistoryUserPromptInput {
   summary?: string;
   historyJson: string;
-  latestMessageDirectedType?: "at" | "reply";
 }
 
 export interface MessageSummaryPromptInput {
@@ -26,7 +25,6 @@ export const messageHistorySchemaPrompt = `
 常见消息段：
 - \`text\`：文本段，读取 \`data.text\`
 - \`at\`：@ 提及段，表示这条消息提到了某个对象；\`data.displayName\` 是被提到的人或全体成员
-- \`reply\`：引用回复段，表示这条消息引用了另一条历史消息；\`data.speaker\` 是被引用消息当时的发言者，\`data.content\` 是被引用消息的内容
 - \`image\`：图片或表情图片段，优先读取 \`data.description\` 作为图片内容描述
 - \`face\`：QQ 表情段，读取 \`data.faceText\`
 
@@ -40,7 +38,7 @@ export const chatReplyRulesPrompt = `
 这是通讯软件里的线上聊天场景，回复内容要像真实会发出去的聊天消息，而不是小说台词、舞台剧脚本或角色扮演旁白。
 不要用括号描写动作、神态、姿势、内心旁白或舞台说明；这些反应要么转成自然口语，要么直接省略。
 聊天回复要克制，不要每条都回，也不要打断自然对话节奏。
-当最新消息明确提问、请求回应、直接 @、引用回复，或上下文正在自然邀请参与时，更倾向回复。
+当最新消息明确提问、请求回应、直接 @，或上下文正在自然邀请参与时，更倾向回复。
 当最新消息只是闲聊片段、情绪宣泄、表情或图片反应、话题已经自然结束、当前接不上话，或回复会显得多余时，不要回复。
 `.trim();
 
@@ -52,24 +50,9 @@ export const chatReplyRulesPrompt = `
  * - 历史 JSON 只承载消息投影，不混入额外控制信息。
  */
 export function buildMessageHistoryUserPrompt(input: MessageHistoryUserPromptInput): string {
-  let latestMessageDirectedDescription = "null";
-
-  switch (input.latestMessageDirectedType) {
-    case "at":
-      latestMessageDirectedDescription = "这条最新消息显式 @ 了当前角色。";
-      break;
-    case "reply":
-      latestMessageDirectedDescription = "这条最新消息使用 reply 引用回复当前角色。";
-      break;
-  }
-
   return `
 ## 最近会话摘要
 ${input.summary || "null"}
-
-## 最新消息补充上下文
-
-${latestMessageDirectedDescription}
 
 ## 历史会话消息
 

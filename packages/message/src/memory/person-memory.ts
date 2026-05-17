@@ -2,9 +2,13 @@ import type { PersonMemoryUpdateInput } from "@yuiju/utils";
 import { getTimeWithWeekday, updatePersonMemory } from "@yuiju/utils";
 import dayjs from "dayjs";
 import {
-  projectHistoryMessageContent,
-  type StoredGroupMessage,
-  type StoredPrivateMessage,
+  getProtocolMessageId,
+  getProtocolMessageSenderName,
+  getProtocolMessageTimestampMs,
+  isStoredSatoriMessage,
+  projectStoredMessageContent,
+  type StoredGroupChatMessage,
+  type StoredPrivateChatMessage,
   type StoredProtocolMessage,
 } from "../utils/message";
 
@@ -16,10 +20,10 @@ export interface ChatWindowState<TMessage extends StoredProtocolMessage> {
 }
 
 interface ChatWindowTranscriptItem {
-  messageId: number;
+  messageId: string;
   speaker: string;
   time: string;
-  content: ReturnType<typeof projectHistoryMessageContent>;
+  content: ReturnType<typeof projectStoredMessageContent>;
 }
 
 interface GroupPersonCandidate {
@@ -28,11 +32,19 @@ interface GroupPersonCandidate {
 }
 
 export function buildPrivatePersonMemoryUpdateInput(
-  state: ChatWindowState<StoredPrivateMessage>,
+  state: ChatWindowState<StoredPrivateChatMessage>,
 ): PersonMemoryUpdateInput | null {
   const nickname = state.messages
-    .filter((message) => message.sender.user_id !== message.self_id)
-    .map((message) => message.sender.card?.trim() || message.sender.nickname?.trim() || null)
+    .filter((message) =>
+      isStoredSatoriMessage(message)
+        ? !message.sender.isSelf
+        : message.sender.user_id !== message.self_id,
+    )
+    .map((message) =>
+      isStoredSatoriMessage(message)
+        ? message.sender.displayName.trim() || null
+        : message.sender.card?.trim() || message.sender.nickname?.trim() || null,
+    )
     .find((senderName) => senderName !== null);
 
   if (!nickname) {
@@ -41,8 +53,11 @@ export function buildPrivatePersonMemoryUpdateInput(
 
   return {
     nickname,
-    interactionCount: state.messages.filter((message) => message.sender.user_id !== message.self_id)
-      .length,
+    interactionCount: state.messages.filter((message) =>
+      isStoredSatoriMessage(message)
+        ? !message.sender.isSelf
+        : message.sender.user_id !== message.self_id,
+    ).length,
     interactionMaterial: buildInteractionMaterial({
       scene: "private",
       sessionLabel: state.sessionLabel,
@@ -55,16 +70,22 @@ export function buildPrivatePersonMemoryUpdateInput(
 }
 
 export function buildGroupPersonMemoryUpdateInputs(
-  state: ChatWindowState<StoredGroupMessage>,
+  state: ChatWindowState<StoredGroupChatMessage>,
 ): PersonMemoryUpdateInput[] {
   const candidateByNickname = new Map<string, GroupPersonCandidate>();
 
   for (const message of state.messages) {
-    if (message.sender.user_id === message.self_id) {
+    if (
+      isStoredSatoriMessage(message)
+        ? message.sender.isSelf
+        : message.sender.user_id === message.self_id
+    ) {
       continue;
     }
 
-    const nickname = message.sender.card?.trim() || message.sender.nickname?.trim();
+    const nickname = isStoredSatoriMessage(message)
+      ? message.sender.displayName.trim()
+      : message.sender.card?.trim() || message.sender.nickname?.trim();
     if (!nickname) {
       continue;
     }
@@ -93,7 +114,7 @@ export function buildGroupPersonMemoryUpdateInputs(
 }
 
 export async function writePersonMemoryUpdatesForPrivateChatWindow(
-  state: ChatWindowState<StoredPrivateMessage>,
+  state: ChatWindowState<StoredPrivateChatMessage>,
 ): Promise<void> {
   const updateInput = buildPrivatePersonMemoryUpdateInput(state);
   if (!updateInput) {
@@ -104,7 +125,7 @@ export async function writePersonMemoryUpdatesForPrivateChatWindow(
 }
 
 export async function writePersonMemoryUpdatesForGroupChatWindow(
-  state: ChatWindowState<StoredGroupMessage>,
+  state: ChatWindowState<StoredGroupChatMessage>,
 ): Promise<void> {
   const updateInputs = buildGroupPersonMemoryUpdateInputs(state);
   for (const updateInput of updateInputs) {
@@ -121,10 +142,10 @@ function buildInteractionMaterial(input: {
   candidate?: GroupPersonCandidate;
 }): string {
   const transcript: ChatWindowTranscriptItem[] = input.messages.map((message) => ({
-    messageId: message.message_id,
-    speaker: message.sender.card?.trim() || message.sender.nickname?.trim() || "未知用户",
-    time: getTimeWithWeekday(dayjs.unix(message.time)),
-    content: projectHistoryMessageContent(message.message),
+    messageId: getProtocolMessageId(message),
+    speaker: getProtocolMessageSenderName(message) || "未知用户",
+    time: getTimeWithWeekday(dayjs(getProtocolMessageTimestampMs(message))),
+    content: projectStoredMessageContent(message),
   }));
   const sceneLabel = input.scene === "private" ? "私聊" : "群聊";
   const candidateText = input.candidate ? `\n当前正在判断的人物：${input.candidate.nickname}` : "";

@@ -1,35 +1,41 @@
+import LarkBot from "@satorijs/adapter-lark";
+import { Context, HTTP } from "@satorijs/core";
+import OneBotBot from "@yuiju/satorijs-adapter-onebot";
 import { connectDB, getYuijuConfig, initializePersonMemoryHeat } from "@yuiju/utils";
-import { NCWebsocket } from "node-napcat-ts";
 import { groupMessageHandler } from "./handler/group-message";
-import { noticePokeHandler } from "./handler/notice-poke";
 import { privateMessageHandler } from "./handler/private-message";
-import { startMessageInternalApi } from "./internal-api";
 import { stickerState } from "./state/sticker";
 import { logger } from "./utils/logger";
+import { normalizeSatoriSession } from "./utils/satori/session";
 
 const config = getYuijuConfig();
+const satori = new Context({});
+satori.plugin(HTTP);
 
-const onebotEndpoint = new URL(config.message.onebot.endpoint);
-const napcat = new NCWebsocket({
-  protocol: config.message.onebot.protocol,
-  host: onebotEndpoint.hostname,
-  port: Number(onebotEndpoint.port),
-  accessToken: config.message.onebot.token,
-  reconnection: {
-    enable: true,
-    attempts: config.message.onebot.retryTimes,
-    delay: config.message.onebot.retryInterval,
-  },
+new LarkBot(satori, {
+  ...config.message.lark,
 });
 
-napcat.on("message.private", (context) => privateMessageHandler(context, napcat));
+new OneBotBot(satori, {
+  ...config.message.onebot,
+});
 
-napcat.on("message.group", (context) => groupMessageHandler(context, napcat));
-// napcat.on("message.group", (context) => {
-//   console.log(context.message);
-// });
+satori.on("message", async (session) => {
+  try {
+    const normalizedSession = await normalizeSatoriSession(session);
 
-napcat.on("notice.notify.poke", (context) => noticePokeHandler(context, napcat));
+    if (normalizedSession.isDirect) {
+      await privateMessageHandler(normalizedSession);
+      return;
+    }
+
+    if (normalizedSession.guildId && normalizedSession.channelId) {
+      await groupMessageHandler(normalizedSession);
+    }
+  } catch (error) {
+    logger.error("[message.server] 处理消息事件失败", error);
+  }
+});
 
 async function main() {
   await connectDB();
@@ -37,9 +43,7 @@ async function main() {
   await initializePersonMemoryHeat();
   // 初始化表情
   await stickerState.initialize();
-  // 连接 napcat
-  await napcat.connect();
-  startMessageInternalApi({ napcat });
+  await satori.start();
   logger.info("[message.server] 消息服务启动完成");
 }
 

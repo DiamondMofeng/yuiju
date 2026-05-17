@@ -1,3 +1,5 @@
+import type { h, Session } from "@satorijs/core";
+import type { Message as SatoriMessage } from "@satorijs/protocol";
 import { SUBJECT_NAME, visionModel } from "@yuiju/utils";
 import { generateText } from "ai";
 import type { AllHandlers, NCWebsocket, Receive } from "node-napcat-ts";
@@ -73,7 +75,48 @@ export type StoredPrivateMessage = Omit<RawPrivateMessage, "message" | "post_typ
   message: EnhancedMessageSegment[];
 };
 
-export type StoredProtocolMessage = StoredPrivateMessage | StoredGroupMessage;
+export interface StoredSatoriMessageSender {
+  id: string;
+  displayName: string;
+  isSelf: boolean;
+}
+
+export interface StoredSatoriGroupMessage {
+  source: "satori";
+  scene: "group";
+  platform: string;
+  messageId: string;
+  channelId: string;
+  guildId?: string;
+  sessionId: string;
+  sessionLabel: string;
+  sender: StoredSatoriMessageSender;
+  timestamp: number;
+  elements: h[];
+  content: HistoryMessageSegment[];
+  rawSession?: Session;
+}
+
+export interface StoredSatoriPrivateMessage {
+  source: "satori";
+  scene: "private";
+  platform: string;
+  messageId: string;
+  channelId: string;
+  sessionId: string;
+  sessionLabel: string;
+  sender: StoredSatoriMessageSender;
+  timestamp: number;
+  elements: h[];
+  content: HistoryMessageSegment[];
+  rawSession?: Session;
+}
+
+export type StoredSatoriChatMessage = StoredSatoriGroupMessage | StoredSatoriPrivateMessage;
+export type StoredGroupChatMessage = StoredGroupMessage | StoredSatoriGroupMessage;
+export type StoredPrivateChatMessage = StoredPrivateMessage | StoredSatoriPrivateMessage;
+export type StoredChatMessage = StoredPrivateChatMessage | StoredGroupChatMessage;
+export type StoredProtocolMessage = StoredChatMessage;
 
 export interface HistoryReplySegment {
   type: "reply";
@@ -156,6 +199,131 @@ export function getReplyDelayMs(text: string): number {
   const estimatedDelayMs = baseDelayMs + text.trim().length * perCharacterDelayMs;
 
   return Math.round(Math.min(maxDelayMs, Math.max(minDelayMs, estimatedDelayMs + randomJitterMs)));
+}
+
+export async function createStoredSatoriGroupMessage(
+  session: Session,
+): Promise<StoredSatoriGroupMessage | null> {
+  if (!session.channelId || session.isDirect || !session.event.message) {
+    return null;
+  }
+
+  const elements = session.elements ?? [];
+  if (!elements.length) {
+    return null;
+  }
+
+  const channelId = session.channelId;
+  const platform = session.platform || session.bot.platform || "unknown";
+  const sender = await getSatoriSender(session);
+  const sessionLabel = await getSatoriGroupSessionLabel(session, platform, channelId);
+
+  return {
+    source: "satori",
+    scene: "group",
+    platform,
+    messageId: session.messageId || `${platform}:${channelId}:${session.id}`,
+    channelId,
+    guildId: session.guildId,
+    sessionId: buildSatoriGroupSessionKey(platform, channelId),
+    sessionLabel,
+    sender,
+    timestamp: session.timestamp || Date.now(),
+    elements,
+    content: await projectSatoriElementsToHistoryContent(elements, session),
+    rawSession: session,
+  };
+}
+
+export async function createStoredSatoriPrivateMessage(
+  session: Session,
+): Promise<StoredSatoriPrivateMessage | null> {
+  if (!session.channelId || !session.isDirect || !session.event.message) {
+    return null;
+  }
+
+  const elements = session.elements ?? [];
+  if (!elements.length) {
+    return null;
+  }
+
+  const channelId = session.channelId;
+  const platform = session.platform || session.bot.platform || "unknown";
+  const sender = await getSatoriSender(session);
+
+  return {
+    source: "satori",
+    scene: "private",
+    platform,
+    messageId: session.messageId || `${platform}:${channelId}:${session.id}`,
+    channelId,
+    sessionId: buildSatoriPrivateSessionKey(platform, channelId),
+    sessionLabel: sender.displayName,
+    sender,
+    timestamp: session.timestamp || Date.now(),
+    elements,
+    content: await projectSatoriElementsToHistoryContent(elements, session),
+    rawSession: session,
+  };
+}
+
+export async function createStoredSatoriGroupBotMessage(input: {
+  sourceMessage: StoredSatoriGroupMessage;
+  messageId: string;
+  elements: h[];
+  timestamp: number;
+}): Promise<StoredSatoriGroupMessage> {
+  return {
+    source: "satori",
+    scene: "group",
+    platform: input.sourceMessage.platform,
+    messageId: input.messageId,
+    channelId: input.sourceMessage.channelId,
+    guildId: input.sourceMessage.guildId,
+    sessionId: input.sourceMessage.sessionId,
+    sessionLabel: input.sourceMessage.sessionLabel,
+    sender: {
+      id: input.sourceMessage.rawSession?.selfId || input.sourceMessage.sender.id,
+      displayName: SUBJECT_NAME,
+      isSelf: true,
+    },
+    timestamp: input.timestamp,
+    elements: input.elements,
+    content: await projectSatoriElementsToHistoryContent(elementsWithoutQuote(input.elements)),
+  };
+}
+
+export async function createStoredSatoriPrivateBotMessage(input: {
+  sourceMessage: StoredSatoriPrivateMessage;
+  messageId: string;
+  elements: h[];
+  timestamp: number;
+}): Promise<StoredSatoriPrivateMessage> {
+  return {
+    source: "satori",
+    scene: "private",
+    platform: input.sourceMessage.platform,
+    messageId: input.messageId,
+    channelId: input.sourceMessage.channelId,
+    sessionId: input.sourceMessage.sessionId,
+    sessionLabel: input.sourceMessage.sessionLabel,
+    sender: {
+      id: input.sourceMessage.rawSession?.selfId || input.sourceMessage.sender.id,
+      displayName: SUBJECT_NAME,
+      isSelf: true,
+    },
+    timestamp: input.timestamp,
+    elements: input.elements,
+    content: await projectSatoriElementsToHistoryContent(elementsWithoutQuote(input.elements)),
+  };
+}
+
+export function buildSatoriGroupSessionKey(platform: string, channelId: string): string {
+  return `group:${platform}:${channelId}`;
+}
+
+export function buildSatoriPrivateSessionKey(platform: string, channelId: string): string {
+  return `private:${platform}:${channelId}`;
 }
 
 /**
@@ -330,7 +498,11 @@ export async function createStoredPrivateMessageFromFetched(
 /**
  * 获取群会话展示名，优先使用运行时携带的群名，没有时回退到群号。
  */
-export function getGroupDisplayName(message: RawGroupMessage | StoredGroupMessage): string {
+export function getGroupDisplayName(message: RawGroupMessage | StoredGroupChatMessage): string {
+  if (isStoredSatoriMessage(message)) {
+    return message.sessionLabel;
+  }
+
   if ("group_name" in message && typeof message.group_name === "string") {
     const groupName = message.group_name.trim();
     if (groupName) {
@@ -344,8 +516,42 @@ export function getGroupDisplayName(message: RawGroupMessage | StoredGroupMessag
 /**
  * 获取协议消息发送者展示名，优先群名片，其次昵称，最后回退到 user_id。
  */
-export function getProtocolMessageSenderName(message: StoredProtocolMessage): string {
+export function getProtocolMessageSenderName(message: StoredChatMessage): string {
+  if (isStoredSatoriMessage(message)) {
+    return message.sender.displayName;
+  }
+
   return message?.sender?.card || message?.sender?.nickname || String(message?.sender?.user_id);
+}
+
+export function getProtocolMessageTimestampMs(message: StoredChatMessage): number {
+  if (isStoredSatoriMessage(message)) {
+    return message.timestamp;
+  }
+
+  return message.time * 1000;
+}
+
+export function getProtocolMessageId(message: StoredChatMessage): string {
+  if (isStoredSatoriMessage(message)) {
+    return message.messageId;
+  }
+
+  return String(message.message_id);
+}
+
+export function projectStoredMessageContent(message: StoredChatMessage): HistoryMessageSegment[] {
+  if (isStoredSatoriMessage(message)) {
+    return message.content;
+  }
+
+  return projectHistoryMessageContent(message.message);
+}
+
+export function isStoredSatoriMessage(message: unknown): message is StoredSatoriChatMessage {
+  return Boolean(
+    message && typeof message === "object" && (message as { source?: string }).source === "satori",
+  );
 }
 
 /**
@@ -393,6 +599,226 @@ export function projectHistoryMessageContent(
       },
     };
   });
+}
+
+async function projectSatoriElementsToHistoryContent(
+  elements: h[],
+  session?: Session,
+): Promise<HistoryMessageSegment[]> {
+  const content: HistoryMessageSegment[] = [];
+  const quoteContent = session ? await projectSatoriQuoteToHistoryContent(session) : null;
+  if (quoteContent) {
+    content.push(quoteContent);
+  }
+
+  for (const element of elementsWithoutQuote(elements)) {
+    if (element.type === "text") {
+      content.push({
+        type: "text",
+        data: {
+          text: String(element.attrs.content ?? ""),
+        },
+      } as HistoryMessageSegment);
+      continue;
+    }
+
+    if (element.type === "at") {
+      content.push({
+        type: "at",
+        data: {
+          displayName: await getSatoriAtDisplayName(element, session),
+        },
+      });
+      continue;
+    }
+
+    if (element.type === "image" || element.type === "img") {
+      content.push({
+        type: "image",
+        data: {
+          description: await resolveSatoriImageDescription(element),
+        },
+      });
+      continue;
+    }
+
+    if (element.type === "face") {
+      content.push({
+        type: "face",
+        data: {
+          faceText: String(element.attrs.name || element.attrs.id || ""),
+        },
+      });
+      continue;
+    }
+
+    const childContent = element.children?.length
+      ? await projectSatoriElementsToHistoryContent(element.children, session)
+      : [];
+    content.push(...childContent);
+  }
+
+  return content;
+}
+
+function elementsWithoutQuote(elements: h[]): h[] {
+  return elements.filter((element) => element.type !== "quote");
+}
+
+async function projectSatoriQuoteToHistoryContent(
+  session: Session,
+): Promise<HistoryReplySegment | null> {
+  const quote = session.quote ?? session.event.message?.quote;
+  if (!quote) {
+    return null;
+  }
+  console.log(222, quote);
+
+  return {
+    type: "reply",
+    data: {
+      speaker: getSatoriQuoteSpeaker(quote),
+      content: await projectSatoriQuotedMessageContent(quote),
+    },
+  };
+}
+
+async function projectSatoriQuotedMessageContent(
+  quote: SatoriMessage,
+): Promise<HistoryMessageSegment[]> {
+  if (quote.elements?.length) {
+    return projectSatoriElementsToHistoryContent(elementsWithoutQuote(quote.elements));
+  }
+
+  const text = quote.content?.trim();
+  if (!text) {
+    return [];
+  }
+
+  return [
+    {
+      type: "text",
+      data: {
+        text,
+      },
+    } as HistoryMessageSegment,
+  ];
+}
+
+function getSatoriQuoteSpeaker(quote: SatoriMessage): string | undefined {
+  return (
+    quote.member?.name?.trim() ||
+    quote.member?.nick?.trim() ||
+    quote.user?.name?.trim() ||
+    quote.user?.username?.trim() ||
+    quote.user?.id
+  );
+}
+
+async function getSatoriSender(session: Session): Promise<StoredSatoriMessageSender> {
+  const userId = session.userId || session.event.user?.id || "unknown";
+  const memberName = session.event.member?.name?.trim() || session.event.member?.nick?.trim();
+  const userName =
+    session.event.user?.name?.trim() ||
+    session.event.user?.nick?.trim() ||
+    session.event.user?.username?.trim();
+
+  if ((session.platform === "lark" || session.platform === "feishu") && session.guildId) {
+    const larkMemberName = await getLarkGuildMemberDisplayName(session, userId);
+    if (larkMemberName) {
+      return {
+        id: userId,
+        displayName: larkMemberName,
+        isSelf: userId === session.selfId,
+      };
+    }
+  }
+
+  return {
+    id: userId,
+    displayName: memberName || userName || userId,
+    isSelf: userId === session.selfId,
+  };
+}
+
+async function getSatoriGroupSessionLabel(
+  session: Session,
+  platform: string,
+  channelId: string,
+): Promise<string> {
+  const eventLabel =
+    session.event.guild?.name?.trim() ||
+    session.event.channel?.name?.trim() ||
+    session.guildId ||
+    channelId;
+
+  if (platform !== "lark") {
+    return eventLabel;
+  }
+
+  if (!session.guildId) {
+    return eventLabel;
+  }
+
+  try {
+    const guild = await session.bot.getGuild(session.guildId);
+    return guild.name?.trim() || eventLabel;
+  } catch {
+    return eventLabel;
+  }
+}
+
+async function getLarkGuildMemberDisplayName(
+  session: Session,
+  userId: string,
+): Promise<string | null> {
+  if (!session.guildId) {
+    return null;
+  }
+
+  try {
+    const members = await session.bot.getGuildMemberList(session.guildId);
+    const member = members.data.find((item) => item.user?.id === userId);
+    return member?.name?.trim() || member?.nick?.trim() || member?.user?.name?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+async function getSatoriAtDisplayName(element: h, session?: Session): Promise<string> {
+  const attrs = element.attrs as Record<string, unknown>;
+  if (attrs.type === "all") {
+    return "全体成员";
+  }
+
+  const userId = String(attrs.id || "");
+  if (!userId) {
+    return String(attrs.name || "未知用户");
+  }
+
+  if (session?.selfId && userId === session.selfId) {
+    return SUBJECT_NAME;
+  }
+
+  const name = typeof attrs.name === "string" ? attrs.name.trim() : "";
+  if (name) {
+    return name;
+  }
+
+  if (!session?.guildId) {
+    return userId;
+  }
+
+  if (session.platform === "lark") {
+    return (await getLarkGuildMemberDisplayName(session, userId)) || userId;
+  }
+
+  try {
+    const member = await session.bot.getGuildMember(session.guildId, userId);
+    return member.name?.trim() || member.nick?.trim() || member.user?.name?.trim() || userId;
+  } catch {
+    return userId;
+  }
 }
 
 async function resolveImageSegment(segment: ImageMessageSegment): Promise<EnhancedImageSegment> {
@@ -461,6 +887,83 @@ async function resolveAtSegment(
       isSelf: false,
     },
   };
+}
+
+async function resolveSatoriImageDescription(element: h): Promise<string | undefined> {
+  const attrs = element.attrs as Record<string, unknown>;
+  const summary = typeof attrs.summary === "string" ? attrs.summary.trim() : "";
+  const stickerDescription = summary ? stickerState.getByKey(summary)?.description : undefined;
+  if (stickerDescription) {
+    return stickerDescription;
+  }
+
+  const file = String(attrs.file || attrs.url || attrs.src || "");
+  const cachedDescription = file ? imageCacheState.get(file) : undefined;
+  if (cachedDescription) {
+    return cachedDescription;
+  }
+
+  const generatedDescription = await generateSatoriImageDescription(element);
+  if (file && generatedDescription) {
+    imageCacheState.set(file, generatedDescription);
+    return generatedDescription;
+  }
+
+  return summary || undefined;
+}
+
+async function generateSatoriImageDescription(element: h): Promise<string | null> {
+  const attrs = element.attrs as Record<string, unknown>;
+  const imageUrl = String(attrs.url || attrs.src || "").trim();
+  if (!imageUrl || imageUrl.startsWith("base64://") || imageUrl.startsWith("data:")) {
+    return null;
+  }
+
+  const summary = typeof attrs.summary === "string" ? attrs.summary.trim() : "";
+
+  try {
+    const result = await generateText({
+      model: visionModel,
+      providerOptions: {
+        vision: {
+          enable_thinking: false,
+        },
+      },
+      system:
+        "你是聊天消息图片描述器。请只根据图片内容输出一小段简洁、客观、自然的中文描述，方便后续聊天理解上下文，不要输出解释、身份猜测或额外寒暄。",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: [
+                "请描述这张图片里最重要的可见内容，控制在 100 字以内。",
+                `这个图片的 summary: ${summary || "空"}。`,
+                "这个字段有语义，不是无意义元数据。",
+                "如果 summary 是 [动画表情]，说明这更像 QQ 动画表情或表情包消息；如果 summary 为空，通常是普通图片。",
+                "请把 summary 当作辅助线索，与图片内容一起判断，但不要机械复述字段名。",
+              ].join("\n"),
+            },
+            {
+              type: "image",
+              image: imageUrl,
+            },
+          ],
+        },
+      ],
+    });
+
+    const description = result.text.trim();
+    return description || null;
+  } catch (error) {
+    logger.warn("[message.image] Satori 图片描述生成失败，降级为 summary", {
+      url: imageUrl,
+      summary,
+      error,
+    });
+    return null;
+  }
 }
 
 function getStickerDescription(segment: ImageMessageSegment): string | null {

@@ -74,6 +74,8 @@ const config = defineYuijuConfig({
       retryTimes: 6,
       retryInterval: 5000,
       retryLazy: 60000,
+      whiteList: [],
+      groupWhiteList: [],
     },
     stickers: {},
   },

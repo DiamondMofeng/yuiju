@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { h } from "@satorijs/core";
 import { getYuijuConfig, getYuijuProjectRoot, type YuijuStickerConfig } from "@yuiju/utils";
 import { type SendMessageSegment, Structs } from "node-napcat-ts";
 import { logger } from "@/utils/logger";
@@ -168,6 +169,55 @@ export class StickerState {
     }
 
     return messageSegments;
+  }
+
+  public buildSatoriElementsFromLine(line: string): h[] {
+    const elements: h[] = [];
+    let lastIndex = 0;
+
+    for (const match of line.matchAll(STICKER_TOKEN_REGEX)) {
+      const fullMatch = match[0];
+      const key = match[1];
+      const startIndex = match.index ?? -1;
+
+      if (startIndex < 0) {
+        continue;
+      }
+
+      if (startIndex > lastIndex) {
+        const text = line.slice(lastIndex, startIndex);
+        if (text.trim()) {
+          elements.push(h.text(text));
+        }
+      }
+
+      const sticker = this.getByKey(key);
+      if (!sticker) {
+        logger.warn("[message.sticker] 命中未知或不可用表情包，降级为文本发送", {
+          key,
+          rawToken: fullMatch,
+        });
+        elements.push(h.text(fullMatch));
+      } else {
+        elements.push(
+          h("image", {
+            url: `base64://${sticker.fileBuffer.toString("base64")}`,
+            summary: sticker.key,
+          }),
+        );
+      }
+
+      lastIndex = startIndex + fullMatch.length;
+    }
+
+    if (lastIndex < line.length) {
+      const text = line.slice(lastIndex);
+      if (text.trim()) {
+        elements.push(h.text(text));
+      }
+    }
+
+    return elements;
   }
 
   private async resolveStickerConfig(input: {
