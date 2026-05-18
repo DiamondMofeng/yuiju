@@ -6,8 +6,10 @@ interface LarkRawMessage {
   message_id?: string;
   chat_id?: string;
   msg_type?: string;
+  message_type?: string;
   create_time?: string;
   update_time?: string;
+  content?: string;
   sender?: {
     id?: string;
   };
@@ -55,6 +57,22 @@ interface LarkBotWithInternal {
 }
 
 export async function normalizeLarkSession(session: Session): Promise<Session> {
+  const rawMessage = getSessionLarkRawMessage(session);
+  if (!session.elements?.length && rawMessage) {
+    const bot = session.bot as unknown as LarkBotWithInternal;
+    const decodedMessage = decodeLarkMessage(bot, rawMessage);
+    if (decodedMessage.elements?.length) {
+      session.elements = decodedMessage.elements;
+      session.content = decodedMessage.content;
+      if (session.event.message) {
+        session.event.message = {
+          ...session.event.message,
+          ...decodedMessage,
+        };
+      }
+    }
+  }
+
   const userId = session.userId || session.event.user?.id;
   if (session.guildId && userId) {
     try {
@@ -142,6 +160,24 @@ export async function normalizeLarkSession(session: Session): Promise<Session> {
   return session;
 }
 
+function getSessionLarkRawMessage(session: Session): LarkRawMessage | null {
+  const rawEvent = (session.event as Record<string, any>)._data?.event;
+  const rawMessage = rawEvent?.message;
+  if (!rawMessage) {
+    return null;
+  }
+
+  const senderId =
+    rawEvent.sender?.sender_id?.open_id ||
+    rawEvent.sender?.sender_id?.user_id ||
+    rawEvent.sender?.sender_id?.union_id;
+
+  return {
+    ...rawMessage,
+    sender: senderId ? { id: senderId } : undefined,
+  };
+}
+
 function hasReadableMessageContent(message: SatoriMessage): boolean {
   return Boolean(message.elements?.length || message.content?.trim());
 }
@@ -170,7 +206,7 @@ function decodeLarkMessage(bot: LarkBotWithInternal, rawMessage: LarkRawMessage)
 function decodeLarkMessageElements(bot: LarkBotWithInternal, rawMessage: LarkRawMessage): h[] {
   const content = parseLarkMessageContent(rawMessage);
 
-  switch (rawMessage.msg_type) {
+  switch (rawMessage.msg_type || rawMessage.message_type) {
     case "text":
       return decodeLarkTextElements(content, rawMessage.mentions);
     case "post":
@@ -184,7 +220,7 @@ function decodeLarkMessageElements(bot: LarkBotWithInternal, rawMessage: LarkRaw
     case "file":
       return buildLarkResourceElements(bot, rawMessage, "file", content.file_key);
     case "sticker":
-      return content.file_key ? [h.text("[表情消息]")] : [];
+      return content.file_key ? [h.text("[飞书表情]")] : [];
     case "interactive":
       return [h.text("[卡片消息]")];
     default:
@@ -193,7 +229,7 @@ function decodeLarkMessageElements(bot: LarkBotWithInternal, rawMessage: LarkRaw
 }
 
 function parseLarkMessageContent(rawMessage: LarkRawMessage): Record<string, any> {
-  const rawContent = rawMessage.body?.content;
+  const rawContent = rawMessage.body?.content || rawMessage.content;
   if (!rawContent) {
     return {};
   }
