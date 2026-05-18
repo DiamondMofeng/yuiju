@@ -5,7 +5,7 @@ import {
   getProtocolMessageSenderName,
   getProtocolMessageTimestampMs,
   projectStoredMessageContent,
-  type StoredProtocolMessage,
+  type StoredSatoriChatMessage,
 } from "@/utils/message";
 
 export interface ChatWindowMessageItem {
@@ -18,7 +18,7 @@ export interface UserWindowState {
   sessionLabel: string;
   windowStartMs: number;
   lastTsMs: number;
-  messages: StoredProtocolMessage[];
+  messages: StoredSatoriChatMessage[];
 }
 
 interface ConversationEpisodePayload {

@@ -16,7 +16,7 @@ import {
   queryStaticGuideTool,
   todayEventSearchTool,
 } from "@yuiju/utils";
-import { generateText, Output, stepCountIs } from "ai";
+import { Output, stepCountIs } from "ai";
 import { z } from "zod";
 import { stickerState } from "@/state/sticker";
 import { logger } from "@/utils/logger";
@@ -24,9 +24,8 @@ import {
   getGroupDisplayName,
   getProtocolMessageId,
   getProtocolMessageSenderName,
-  isStoredSatoriMessage,
-  type StoredGroupChatMessage,
-  type StoredPrivateChatMessage,
+  type StoredSatoriGroupMessage,
+  type StoredSatoriPrivateMessage,
 } from "@/utils/message";
 import {
   type AbstractChatSessionManager,
@@ -67,8 +66,8 @@ export type PrivateChatResult = {
 };
 
 export class LLMManager {
-  private privateSession: AbstractChatSessionManager<StoredPrivateChatMessage>;
-  private groupSession: AbstractChatSessionManager<StoredGroupChatMessage>;
+  private privateSession: AbstractChatSessionManager<StoredSatoriPrivateMessage>;
+  private groupSession: AbstractChatSessionManager<StoredSatoriGroupMessage>;
   /**
    * 记录每个群当前正在执行的回复生成任务，用于在同群新消息到来时取消旧请求。
    */
@@ -104,7 +103,7 @@ export class LLMManager {
   /**
    * 将群原始消息写入群会话历史，保证群聊模型拿到稳定上下文。
    */
-  public recordGroupMessage(message: StoredGroupChatMessage, sessionLabel?: string) {
+  public recordGroupMessage(message: StoredSatoriGroupMessage, sessionLabel?: string) {
     this.groupSession.recordMessage({
       sessionId: this.buildGroupSessionKey(message),
       sessionLabel: sessionLabel ?? getGroupDisplayName(message),
@@ -115,7 +114,7 @@ export class LLMManager {
   /**
    * 将私聊原始消息写入私聊会话历史，保证回复模型与真实会话事实源保持一致。
    */
-  public recordPrivateMessage(message: StoredPrivateChatMessage, sessionLabel?: string) {
+  public recordPrivateMessage(message: StoredSatoriPrivateMessage, sessionLabel?: string) {
     this.privateSession.recordMessage({
       sessionId: this.buildPrivateSessionKey(message),
       sessionLabel: sessionLabel ?? getProtocolMessageSenderName(message),
@@ -124,35 +123,31 @@ export class LLMManager {
   }
 
   /**
-   * 读取群聊当前会话上下文，供 message 外部能力复用同一份历史投影。
+   * 读取群聊当前会话上下文，供内部接口复用同一份历史投影。
    */
   public async getGroupConversationContext(input: {
-    groupId: number;
+    platform: string;
+    channelId: string;
     limit?: number;
   }): Promise<SessionHistoryContext> {
-    return this.groupSession.getHistoryJson(`group:${input.groupId}`, input.limit);
+    return this.groupSession.getHistoryJson(
+      `group:${input.platform}:${input.channelId}`,
+      input.limit,
+    );
   }
 
-  private buildPrivateSessionKey(message: StoredPrivateChatMessage): string {
-    if (isStoredSatoriMessage(message)) {
-      return message.sessionId;
-    }
-
-    return `private:${message.user_id}`;
+  private buildPrivateSessionKey(message: StoredSatoriPrivateMessage): string {
+    return message.sessionId;
   }
 
-  private buildGroupSessionKey(message: StoredGroupChatMessage): string {
-    if (isStoredSatoriMessage(message)) {
-      return message.sessionId;
-    }
-
-    return `group:${message.group_id}`;
+  private buildGroupSessionKey(message: StoredSatoriGroupMessage): string {
+    return message.sessionId;
   }
 
   /**
    * 判断是否需要回复群消息，并在需要时生成自然语言回复。
    */
-  public async chatInGroup(message: StoredGroupChatMessage): Promise<GroupChatResult> {
+  public async chatInGroup(message: StoredSatoriGroupMessage): Promise<GroupChatResult> {
     const sessionKey = this.buildGroupSessionKey(message);
     const requestId = getProtocolMessageId(message);
     const previousTask = this.activeGroupChatTaskBySessionId.get(sessionKey);
@@ -265,7 +260,7 @@ export class LLMManager {
     return this.latestGroupChatRequestIdBySessionId.get(sessionId) === requestId;
   }
 
-  public async chatWithLLM(message: StoredPrivateChatMessage) {
+  public async chatWithLLM(message: StoredSatoriPrivateMessage) {
     const sessionId = this.buildPrivateSessionKey(message);
     const { historyJson, summary } = await this.privateSession.getHistoryJson(sessionId);
     const sessionLabel = getProtocolMessageSenderName(message);

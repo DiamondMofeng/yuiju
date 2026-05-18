@@ -173,7 +173,7 @@ async function projectSatoriElementsToHistoryContent(
       content.push({
         type: "image",
         data: {
-          description: await resolveSatoriImageDescription(element),
+          description: await resolveSatoriImageDescription(element, session),
         },
       });
       continue;

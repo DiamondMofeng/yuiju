@@ -286,7 +286,11 @@ function buildLarkResourceElements(
 
   const url = bot.getResourceUrl(type === "media" ? "file" : type, rawMessage.message_id, fileKey);
   if (type === "image") {
-    return [h.image(url)];
+    const image = h.image(url);
+    image.attrs.messageId = rawMessage.message_id;
+    image.attrs.fileKey = fileKey;
+    image.attrs.resourceType = "image";
+    return [image];
   }
   if (type === "audio") {
     return [h.audio(url)];

@@ -1,21 +1,69 @@
+import { setTimeout } from "node:timers/promises";
 import { serve } from "@hono/node-server";
-import { getYuijuConfig } from "@yuiju/utils";
+import type LarkBot from "@satorijs/adapter-lark";
+import type OneBotBot from "@yuiju/satorijs-adapter-onebot";
+import { getYuijuConfig, SUBJECT_NAME } from "@yuiju/utils";
 import { Hono } from "hono";
-import type { NCWebsocket } from "node-napcat-ts";
 import { llmManager } from "@/llm/manager";
 import { stickerState } from "@/state/sticker";
 import { logger } from "@/utils/logger";
-import { sendAndRecordGroupProactiveMessage } from "@/utils/message";
+import { getReplyDelayMs } from "@/utils/message";
+import {
+  buildSatoriGroupSessionKey,
+  createStoredSatoriGroupBotMessage,
+} from "@/utils/message/satori";
+import type { StoredSatoriGroupMessage } from "@/utils/message/types";
+
+type MessagePlatform = "onebot" | "lark";
 
 interface InternalApiInput {
-  napcat: NCWebsocket;
+  onebot: OneBotBot;
+  lark: LarkBot;
 }
 
-async function getGroupLabel(input: { napcat: NCWebsocket; groupId: number }): Promise<string> {
-  const groupInfo = await input.napcat.get_group_info({
-    group_id: input.groupId,
-  });
-  return groupInfo.group_name;
+function getPlatformBot(input: InternalApiInput, platform: MessagePlatform) {
+  return platform === "onebot" ? input.onebot : input.lark;
+}
+
+async function getGroupLabel(input: {
+  onebot: OneBotBot;
+  lark: LarkBot;
+  platform: MessagePlatform;
+  groupId: string;
+}): Promise<string> {
+  if (input.platform === "onebot") {
+    const group = await input.onebot.getGuild(input.groupId);
+    return group.name || input.groupId;
+  }
+
+  const channel = await input.lark.getChannel(input.groupId);
+  return channel.name || input.groupId;
+}
+
+function buildInternalSourceMessage(input: {
+  platform: MessagePlatform;
+  groupId: string;
+  sessionLabel: string;
+  selfId: string;
+}): StoredSatoriGroupMessage {
+  return {
+    source: "satori",
+    scene: "group",
+    platform: input.platform,
+    messageId: `internal-api:${input.platform}:${input.groupId}`,
+    channelId: input.groupId,
+    guildId: input.groupId,
+    sessionId: buildSatoriGroupSessionKey(input.platform, input.groupId),
+    sessionLabel: input.sessionLabel,
+    sender: {
+      id: input.selfId,
+      displayName: SUBJECT_NAME,
+      isSelf: true,
+    },
+    timestamp: Date.now(),
+    elements: [],
+    content: [],
+  };
 }
 
 export function startMessageInternalApi(input: InternalApiInput) {
@@ -32,13 +80,28 @@ export function startMessageInternalApi(input: InternalApiInput) {
     });
   });
 
-  app.get("/internal/groups/:groupId/context", async (context) => {
-    const groupId = Number(context.req.param("groupId"));
+  app.get("/internal/:platform/groups/:groupId/context", async (context) => {
+    const platform = context.req.param("platform") as MessagePlatform;
+    if (platform !== "onebot" && platform !== "lark") {
+      return context.json({ message: "unsupported platform" }, 400);
+    }
+
+    const groupId = context.req.param("groupId");
     const limit = Number(context.req.query("limit") ?? 20);
-    const groupLabel = await getGroupLabel({ napcat: input.napcat, groupId });
-    const groupContext = await llmManager.getGroupConversationContext({ groupId, limit });
+    const groupLabel = await getGroupLabel({
+      onebot: input.onebot,
+      lark: input.lark,
+      platform,
+      groupId,
+    });
+    const groupContext = await llmManager.getGroupConversationContext({
+      platform,
+      channelId: groupId,
+      limit,
+    });
 
     return context.json({
+      platform,
       groupId,
       groupLabel,
       summary: groupContext.summary,
@@ -46,20 +109,60 @@ export function startMessageInternalApi(input: InternalApiInput) {
     });
   });
 
-  app.post("/internal/groups/:groupId/messages", async (context) => {
-    const groupId = Number(context.req.param("groupId"));
+  app.post("/internal/:platform/groups/:groupId/messages", async (context) => {
+    const platform = context.req.param("platform") as MessagePlatform;
+    if (platform !== "onebot" && platform !== "lark") {
+      return context.json({ message: "unsupported platform" }, 400);
+    }
+
+    const groupId = context.req.param("groupId");
     const body = await context.req.json<{ message: string }>();
     const message = body.message.trim();
-
-    const groupLabel = await getGroupLabel({ napcat: input.napcat, groupId });
-    const result = await sendAndRecordGroupProactiveMessage({
-      napcat: input.napcat,
+    const groupLabel = await getGroupLabel({
+      onebot: input.onebot,
+      lark: input.lark,
+      platform,
       groupId,
-      message,
-      sessionLabel: groupLabel,
     });
+    const bot = getPlatformBot(input, platform);
+    const sourceMessage = buildInternalSourceMessage({
+      platform,
+      groupId,
+      sessionLabel: groupLabel,
+      selfId: bot.selfId || bot.user?.id || platform,
+    });
+    const replyLines = message.split("\n").filter((line) => line.trim().length > 0);
+    const sentMessageIds: string[] = [];
 
-    return context.json(result);
+    for (const [lineIndex, line] of replyLines.entries()) {
+      const elements = stickerState.buildSatoriElementsFromLine(line);
+      if (!elements.length) {
+        continue;
+      }
+
+      const currentTimestamp = Date.now();
+      const currentSentMessageIds = await bot.sendMessage(groupId, elements);
+      const sentMessageId =
+        currentSentMessageIds[0] ??
+        `internal:${platform}:${groupId}:${currentTimestamp}:${lineIndex}`;
+
+      sentMessageIds.push(...currentSentMessageIds);
+
+      const storedSentMessage = await createStoredSatoriGroupBotMessage({
+        sourceMessage,
+        messageId: sentMessageId,
+        elements,
+        timestamp: currentTimestamp,
+      });
+      llmManager.recordGroupMessage(storedSentMessage);
+
+      const nextLine = replyLines[lineIndex + 1];
+      if (nextLine) {
+        await setTimeout(getReplyDelayMs(nextLine));
+      }
+    }
+
+    return context.json({ sentMessageIds });
   });
 
   return serve(

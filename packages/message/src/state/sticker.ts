@@ -2,7 +2,6 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { h } from "@satorijs/core";
 import { getYuijuConfig, getYuijuProjectRoot, type YuijuStickerConfig } from "@yuiju/utils";
-import { type SendMessageSegment, Structs } from "node-napcat-ts";
 import { logger } from "@/utils/logger";
 
 export interface ResolvedSticker {
@@ -117,58 +116,6 @@ export class StickerState {
       "格式示例：",
       `[[sticker:${exampleSticker.key}]]`,
     ].join("\n");
-  }
-
-  /**
-   * 将单行回复解析为可发送的消息段。
-   *
-   * 说明：
-   * - 只识别严格格式 `[[sticker:key]]`；
-   * - 未知表情包会降级为原始文本，避免丢失模型输出内容；
-   * - 空白文本不会生成消息段，防止发出空消息。
-   */
-  public buildMessageSegmentsFromLine(line: string): SendMessageSegment[] {
-    const messageSegments: SendMessageSegment[] = [];
-    let lastIndex = 0;
-
-    for (const match of line.matchAll(STICKER_TOKEN_REGEX)) {
-      const fullMatch = match[0];
-      const key = match[1];
-      const startIndex = match.index ?? -1;
-
-      if (startIndex < 0) {
-        continue;
-      }
-
-      if (startIndex > lastIndex) {
-        const text = line.slice(lastIndex, startIndex);
-        if (text.trim()) {
-          messageSegments.push(Structs.text(text));
-        }
-      }
-
-      const sticker = this.getByKey(key);
-      if (!sticker) {
-        logger.warn("[message.sticker] 命中未知或不可用表情包，降级为文本发送", {
-          key,
-          rawToken: fullMatch,
-        });
-        messageSegments.push(Structs.text(fullMatch));
-      } else {
-        messageSegments.push(Structs.image(sticker.fileBuffer, sticker.key));
-      }
-
-      lastIndex = startIndex + fullMatch.length;
-    }
-
-    if (lastIndex < line.length) {
-      const text = line.slice(lastIndex);
-      if (text.trim()) {
-        messageSegments.push(Structs.text(text));
-      }
-    }
-
-    return messageSegments;
   }
 
   public buildSatoriElementsFromLine(line: string): h[] {

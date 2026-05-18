@@ -21,7 +21,7 @@ import {
 } from "@yuiju/utils";
 import { Output } from "ai";
 import { z } from "zod";
-import { internalMessageApi } from "@/api/internal-message-api";
+import { type InternalMessagePlatform, internalMessageApi } from "@/api/internal-message-api";
 import { logger } from "@/utils/logger";
 
 interface ScheduleActionCompletionProactiveShareInput {
@@ -37,6 +37,11 @@ interface ProactiveGroupMessageDecision {
   shouldSend: boolean;
   reason: string;
   message: string;
+}
+
+interface ProactiveGroupTarget {
+  platform: InternalMessagePlatform;
+  groupId: string;
 }
 
 export function scheduleActionCompletionProactiveShare(
@@ -65,60 +70,77 @@ async function shareActionCompletionToGroup(
   },
 ) {
   const config = getYuijuConfig();
-  const groupId = config.message.proactive.groupTargetId;
   const stickers = await internalMessageApi.getStickers();
-  const groupContext = await internalMessageApi.getGroupContext(groupId, 6);
-
-  const result = await generateStructuredOutput({
-    model: flashModel,
-    providerOptions: {
-      flash: {
-        enable_thinking: false,
-      },
+  const targets: ProactiveGroupTarget[] = [
+    {
+      platform: "onebot",
+      groupId: String(config.message.proactive.groupTargetId),
     },
-    system: [
-      getCharacterCardPrompt(),
-      messageHistorySchemaPrompt,
-      chatReplyRulesPrompt,
-      stickers.promptSection,
-    ].join("\n\n"),
-    messages: [
-      {
-        role: "user",
-        content: buildProactiveGroupMessagePrompt({
-          action: input.runningAction.action,
-          shareReason: input.shareReason,
-          eventDescription: input.eventDescription,
-          completionContext: input.completionContext,
-          characterStateSnapshot: input.characterStateSnapshot,
-          worldStateSnapshot: input.worldStateSnapshot,
-          groupContext,
-        }),
+    {
+      platform: "lark",
+      groupId: config.message.proactive.larkGroupTargetId,
+    },
+  ];
+
+  for (const target of targets) {
+    const groupContext = await internalMessageApi.getGroupContext(
+      target.platform,
+      target.groupId,
+      6,
+    );
+    const result = await generateStructuredOutput({
+      model: flashModel,
+      providerOptions: {
+        flash: {
+          enable_thinking: false,
+        },
       },
-    ],
-    ...createToolCallLoggingHooks({
-      scene: "world.llm.proactive-message",
-    }),
-    output: Output.object({
-      schema: z.object({
-        shouldSend: z.boolean().describe("当前是否适合发送这条主动生活分享"),
-        reason: z.string().describe("适合或不适合发送的简短原因"),
-        message: z.string().describe("最终要发送到群里的消息，shouldSend=false 时为空字符串"),
+      system: [
+        getCharacterCardPrompt(),
+        messageHistorySchemaPrompt,
+        chatReplyRulesPrompt,
+        stickers.promptSection,
+      ].join("\n\n"),
+      messages: [
+        {
+          role: "user",
+          content: buildProactiveGroupMessagePrompt({
+            action: input.runningAction.action,
+            shareReason: input.shareReason,
+            eventDescription: input.eventDescription,
+            completionContext: input.completionContext,
+            characterStateSnapshot: input.characterStateSnapshot,
+            worldStateSnapshot: input.worldStateSnapshot,
+            groupContext,
+          }),
+        },
+      ],
+      ...createToolCallLoggingHooks({
+        scene: "world.llm.proactive-message",
       }),
-    }),
-  });
+      output: Output.object({
+        schema: z.object({
+          shouldSend: z.boolean().describe("当前是否适合发送这条主动生活分享"),
+          reason: z.string().describe("适合或不适合发送的简短原因"),
+          message: z.string().describe("最终要发送到群里的消息，shouldSend=false 时为空字符串"),
+        }),
+      }),
+    });
 
-  const decision = result.output as ProactiveGroupMessageDecision;
-  logger.info("[proactive-message] 主动分享决策完成", {
-    action: input.runningAction.action,
-    behaviorEpisodeId: input.runningAction.behaviorEpisodeId,
-    shouldSend: decision.shouldSend,
-    reason: decision.reason,
-  });
+    const decision = result.output as ProactiveGroupMessageDecision;
+    logger.info("[proactive-message] 主动分享决策完成", {
+      action: input.runningAction.action,
+      behaviorEpisodeId: input.runningAction.behaviorEpisodeId,
+      platform: target.platform,
+      groupId: target.groupId,
+      shouldSend: decision.shouldSend,
+      reason: decision.reason,
+    });
 
-  if (!decision.shouldSend) {
-    return;
+    if (!decision.shouldSend) {
+      continue;
+    }
+
+    await internalMessageApi.sendGroupMessage(target.platform, target.groupId, decision.message);
   }
-
-  await internalMessageApi.sendGroupMessage(groupId, decision.message);
 }

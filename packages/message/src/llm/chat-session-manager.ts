@@ -13,9 +13,9 @@ import {
   getProtocolMessageTimestampMs,
   type HistoryJsonItem,
   projectStoredMessageContent,
-  type StoredGroupChatMessage,
-  type StoredPrivateChatMessage,
-  type StoredProtocolMessage,
+  type StoredSatoriChatMessage,
+  type StoredSatoriGroupMessage,
+  type StoredSatoriPrivateMessage,
 } from "@/utils/message";
 import { buildConversationEpisode } from "../memory/episode-builder";
 import {
@@ -126,7 +126,7 @@ export interface EpisodeWindowState<TMessage> {
   messages: TMessage[];
 }
 
-interface BaseChatSessionManagerInput<TMessage extends StoredProtocolMessage> {
+interface BaseChatSessionManagerInput<TMessage extends StoredSatoriChatMessage> {
   options: ChatSessionManagerOptions;
   sceneLabel: "group" | "private";
 }
@@ -139,7 +139,7 @@ interface BaseChatSessionManagerInput<TMessage extends StoredProtocolMessage> {
  * - 上层仍通过 Group/Private 两个薄包装类接入，保留业务语义边界。
  */
 export class BaseChatSessionManager<
-  TMessage extends StoredProtocolMessage,
+  TMessage extends StoredSatoriChatMessage,
 > extends AbstractChatSessionManager<TMessage> {
   private conversationBySessionId = new Map<string, TMessage[]>();
   private summaryChunkBySessionId = new Map<string, RollingSummaryChunkState<TMessage>>();
@@ -442,13 +442,13 @@ export class BaseChatSessionManager<
   private async writePersonMemoryUpdatesForChatWindow(state: EpisodeWindowState<TMessage>) {
     if (this.sceneLabel === "private") {
       await writePersonMemoryUpdatesForPrivateChatWindow(
-        state as EpisodeWindowState<StoredPrivateChatMessage>,
+        state as EpisodeWindowState<StoredSatoriPrivateMessage>,
       );
       return;
     }
 
     await writePersonMemoryUpdatesForGroupChatWindow(
-      state as EpisodeWindowState<StoredGroupChatMessage>,
+      state as EpisodeWindowState<StoredSatoriGroupMessage>,
     );
   }
 
@@ -484,7 +484,7 @@ export class BaseChatSessionManager<
  * - 作为群聊场景的轻量适配层，复用通用会话内核；
  * - 保留独立类名，避免上层群聊语义被通用实现抹平。
  */
-export class GroupChatSessionManager extends BaseChatSessionManager<StoredGroupChatMessage> {
+export class GroupChatSessionManager extends BaseChatSessionManager<StoredSatoriGroupMessage> {
   constructor(options: ChatSessionManagerOptions) {
     super({
       options,
@@ -500,7 +500,7 @@ export class GroupChatSessionManager extends BaseChatSessionManager<StoredGroupC
  * - 作为私聊场景的轻量适配层，复用通用会话内核；
  * - 保留独立类名，便于后续私聊策略单独分叉。
  */
-export class PrivateChatSessionManager extends BaseChatSessionManager<StoredPrivateChatMessage> {
+export class PrivateChatSessionManager extends BaseChatSessionManager<StoredSatoriPrivateMessage> {
   constructor(options: ChatSessionManagerOptions) {
     super({
       options,

@@ -21,7 +21,6 @@ export async function groupMessageHandler(session: Session) {
   }
 
   const sessionGroupId = session.guildId ?? session.channelId;
-  console.log(111, sessionGroupId);
   if (!sessionGroupId) {
     return;
   }

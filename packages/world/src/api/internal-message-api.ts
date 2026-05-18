@@ -1,5 +1,7 @@
 import { getYuijuConfig } from "@yuiju/utils";
 
+export type InternalMessagePlatform = "onebot" | "lark";
+
 export interface InternalStickerContext {
   promptSection: string;
   stickers: {
@@ -9,7 +11,8 @@ export interface InternalStickerContext {
 }
 
 export interface InternalGroupConversationContext {
-  groupId: number;
+  platform: InternalMessagePlatform;
+  groupId: string;
   groupLabel: string;
   summary?: string;
   historyJson: string;
@@ -28,23 +31,26 @@ export class InternalMessageApi {
     return (await response.json()) as InternalStickerContext;
   }
 
-  async getGroupContext(groupId: number, limit: number) {
+  async getGroupContext(platform: InternalMessagePlatform, groupId: string, limit: number) {
     const response = await fetch(
-      `${this.baseUrl}/internal/groups/${groupId}/context?limit=${limit}`,
+      `${this.baseUrl}/internal/${platform}/groups/${groupId}/context?limit=${limit}`,
     );
     return (await response.json()) as InternalGroupConversationContext;
   }
 
-  async sendGroupMessage(groupId: number, message: string) {
-    const response = await fetch(`${this.baseUrl}/internal/groups/${groupId}/messages`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
+  async sendGroupMessage(platform: InternalMessagePlatform, groupId: string, message: string) {
+    const response = await fetch(
+      `${this.baseUrl}/internal/${platform}/groups/${groupId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          message,
+        }),
       },
-      body: JSON.stringify({
-        message,
-      }),
-    });
+    );
     await response.json();
   }
 }
