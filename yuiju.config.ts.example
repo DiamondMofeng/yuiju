@@ -51,6 +51,7 @@ const config = defineYuijuConfig({
     },
     proactive: {
       groupTargetId: 838986741,
+      larkGroupTargetId: "xxx",
     },
     onebot: {
       protocol: "ws",

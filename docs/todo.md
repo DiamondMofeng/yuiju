@@ -10,7 +10,7 @@
 
 ## 消息改造
 
-1. satorijs 的消息体中没有 quote 的内容，这部分内容需要我们处理一下
+1. 项目配置 proactive.groupTargetId 改成 onebot 相关的
 
 ## 想法
 
