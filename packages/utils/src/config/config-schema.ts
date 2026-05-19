@@ -69,7 +69,7 @@ export interface YuijuMessageConfig {
   lark: YuijuLarkConfig;
   internalApi: YuijuMessageInternalApiConfig;
   proactive: {
-    groupTargetId: number;
+    onebotGroupTargetId: number;
     larkGroupTargetId: string;
   };
   stickers: YuijuStickerMap;

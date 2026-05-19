@@ -74,7 +74,7 @@ async function shareActionCompletionToGroup(
   const targets: ProactiveGroupTarget[] = [
     {
       platform: "onebot",
-      groupId: String(config.message.proactive.groupTargetId),
+      groupId: String(config.message.proactive.onebotGroupTargetId),
     },
     {
       platform: "lark",

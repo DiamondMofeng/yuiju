@@ -52,7 +52,7 @@ const config = defineYuijuConfig({
       port: 3020,
     },
     proactive: {
-      groupTargetId: 0,
+      onebotGroupTargetId: 0,
       larkGroupTargetId: "",
     },
     onebot: {
