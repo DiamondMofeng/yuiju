@@ -14,7 +14,6 @@ import {
   NICKNAME,
   queryStateTool,
   queryStaticGuideTool,
-  smallModel,
   todayEventSearchTool,
 } from "@yuiju/utils";
 import { Output, stepCountIs } from "ai";
@@ -183,7 +182,7 @@ export class LLMManager {
 
     try {
       const result = await generateStructuredOutput({
-        model: smallModel,
+        model: flashModel,
         providerOptions: {
           flash: {
             enable_thinking: false,
@@ -274,7 +273,7 @@ export class LLMManager {
     ].join("\n\n");
 
     const result = await generateStructuredOutput({
-      model: smallModel,
+      model: flashModel,
       providerOptions: {
         flash: {
           enable_thinking: false,
