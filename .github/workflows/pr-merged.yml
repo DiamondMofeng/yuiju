@@ -11,7 +11,7 @@ jobs:
   if_merged:
     runs-on: ubuntu-latest
     steps:
-      - name: yuijiu offers a heart when a PR is merged
+      - name: yuiju offers a heart when a PR is merged
         if: github.event.pull_request.merged == true
         uses: actions/github-script@v9
         with:
@@ -20,5 +20,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '<img width="200" height="200" alt="yuijiu heart" src="https://github.com/user-attachments/assets/f9945215-5008-4731-b37b-5772c899580e" />'
+              body: '<img width="200" height="200" alt="yuiju heart" src="https://github.com/user-attachments/assets/f9945215-5008-4731-b37b-5772c899580e" />'
             })
